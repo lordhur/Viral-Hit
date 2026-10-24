@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="viral-hit-flame" x1="4" y1="28" x2="28" y2="4" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff6a3d"/>
+      <stop offset=".52" stop-color="#ff3d71"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <linearGradient id="viral-hit-shine" x1="16" y1="1" x2="16" y2="18" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#viral-hit-flame)"/>
+  <rect x="1" y="1" width="30" height="17" rx="9" fill="url(#viral-hit-shine)"/>
+  <path d="M8 9.5 14.05 23h3.9L24 9.5h-4.3l-3.72 8.86-3.7-8.86H8Z" fill="#fff"/>
+  <path d="m22.8 5.2.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1Z" fill="#fff" fill-opacity=".92"/>
+</svg>
