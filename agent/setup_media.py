@@ -13,8 +13,20 @@ TARGET = ROOT / ".cache" / "media-python"
 VERSION = "0.6.0"
 
 
+def cached_ffmpeg() -> Path | None:
+    directory = TARGET / "imageio_ffmpeg" / "binaries"
+    for candidate in sorted(directory.glob("ffmpeg-*"), reverse=True) if directory.is_dir() else []:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
 def main() -> int:
     TARGET.mkdir(parents=True, exist_ok=True)
+    existing = cached_ffmpeg()
+    if existing and (TARGET / f"imageio_ffmpeg-{VERSION}.dist-info").is_dir():
+        print(f"FFmpeg already present; download skipped: {existing}")
+        return 0
     subprocess.run(
         [sys.executable, "-m", "pip", "install", "--upgrade", "--only-binary=:all:", "--no-deps", "--target", str(TARGET), f"imageio-ffmpeg=={VERSION}"],
         cwd=ROOT,

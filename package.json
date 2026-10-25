@@ -15,7 +15,7 @@
     "setup:desktop": "install-electron",
     "dev:web": "vite --config vite.renderer.config.ts --host 0.0.0.0",
     "dev:agent": "tsx src/server/index.ts",
-    "setup:media": "python3 -m agent.setup_media",
+    "setup:media": "node scripts/setup-media.mjs",
     "start:web": "tsx src/server/index.ts",
     "build:web": "vite build --config vite.renderer.config.ts",
     "build": "electron-vite build",

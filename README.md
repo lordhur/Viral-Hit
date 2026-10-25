@@ -6,11 +6,19 @@ Viral Hit réunit les quatre projets sources demandés — AutoClip, AICLIPS Stu
 
 ## Accès rapide
 
-### Dans Arena
+### Windows — raccourcis et mises à jour faciles
 
-Ouvrez l’aperçu **Viral Hit**. L’interface et son backend réel sont servis ensemble : utilisez **Importer** pour charger une vidéo, puis choisissez **Clips** ou **Récap vidéo**.
+Ouvrez **Windows PowerShell**, copiez ces trois lignes, puis validez :
 
-### Sur votre machine
+```powershell
+$script = "$env:TEMP\Viral-Hit-Install.ps1"
+Invoke-WebRequest "https://raw.githubusercontent.com/lordhur/Viral-Hit/refs/heads/arena/b4628d5e-viral-hit/scripts/windows/install.ps1" -OutFile $script -UseBasicParsing
+powershell -NoProfile -ExecutionPolicy Bypass -File $script
+```
+
+L’installateur crée les raccourcis Bureau **Viral Hit** et **Mettre à jour Viral Hit**. Les mises à jour sont incrémentales et conservent les données, réglages et caches. Consultez le [guide Windows complet](docs/WINDOWS.md).
+
+### Installation manuelle sur votre machine
 
 Prérequis : **Node.js 22+**, Corepack, et **Python 3.10+** pour les récaps.
 
