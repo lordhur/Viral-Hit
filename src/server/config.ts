@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
-import { isAbsolute, join, relative, resolve } from "path";
+import { isAbsolute, join, relative, resolve, sep } from "path";
 import { parseEnv } from "util";
 import { userDataDir } from "../core/appenv";
 
@@ -31,12 +31,20 @@ export function defaultExportDir(): string {
   return join(serverDataDir(), "exports");
 }
 
+type PathSemantics = Pick<typeof import("path"), "relative" | "isAbsolute" | "sep">;
+const nativePathSemantics: PathSemantics = { relative, isAbsolute, sep };
+
+/** Containment without assuming POSIX separators (Windows uses backslashes). */
+export function isPathInside(root: string, candidate: string, paths: PathSemantics = nativePathSemantics): boolean {
+  const child = paths.relative(root, candidate);
+  return child === "" || (child !== ".." && !child.startsWith(`..${paths.sep}`) && !paths.isAbsolute(child));
+}
+
 export function assertInside(root: string, candidate: string): string {
   if (!isAbsolute(candidate)) throw new Error("An absolute local path is required");
   const normalizedRoot = resolve(root);
   const normalized = resolve(candidate);
-  const child = relative(normalizedRoot, normalized);
-  if (child === ".." || child.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(child)) {
+  if (!isPathInside(normalizedRoot, normalized)) {
     throw new Error("This browser session only accesses files inside the Viral Hit data directory");
   }
   return normalized;

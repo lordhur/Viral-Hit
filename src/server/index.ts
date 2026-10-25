@@ -6,7 +6,7 @@ import { randomUUID } from "crypto";
 import { EventHub } from "./events";
 import { LocalService } from "./service";
 import { JobManager, type RecapJobInput } from "./jobs";
-import { assertInside, loadLocalEnv, serverDataDir, serverRoot } from "./config";
+import { assertInside, isPathInside, loadLocalEnv, serverDataDir, serverRoot } from "./config";
 
 loadLocalEnv(serverRoot());
 
@@ -153,7 +153,7 @@ async function serveStatic(res: ServerResponse, pathname: string): Promise<boole
   if (!existsSync(join(root, "index.html"))) return false;
   const requested = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
   const candidate = resolve(root, requested);
-  if (!candidate.startsWith(`${root}/`)) return false;
+  if (!isPathInside(root, candidate)) return false;
   let path = candidate;
   if (!existsSync(path) || !(await stat(path)).isFile()) path = join(root, "index.html");
   const body = await readFile(path);
