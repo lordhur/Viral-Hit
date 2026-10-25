@@ -4,7 +4,8 @@
  * 这次还怎么出。多人对谈(diarize)故意不记:它对单视频生效,换素材要重判。
  */
 import { create } from "zustand";
-import type { CaptionStyleChoice, ClipLength, ExportQuality } from "../../../shared/api-types";
+import type { CaptionStyleChoice, ClipLength, ExportQuality, TargetPlatform } from "../../../shared/api-types";
+import { CUSTOM_GAME_ID, GAME_PROFILES } from "../../../shared/gaming-formats";
 import { validPlatformIds } from "../../../shared/platform-specs";
 import {
   defaultCameraGameplayLayout,
@@ -73,6 +74,12 @@ export interface RenderPrefs {
   /** 一片多版:总版本数(1=关,2/3=同一切片出几版差异化包装)。 */
   variants: number;
   clipLength: ClipLength;
+  /** Custom target in seconds; automatic mode leaves the choice to content/format fit. */
+  customDurationSec: number;
+  /** Game-specific editorial formats and TikTok/Instagram ranking target. */
+  gameId: string;
+  gameName: string;
+  targetPlatform: TargetPlatform;
   /** 直播品类判据(见 core/genre.ts);custom 时用 genreCustom 的文本。 */
   genreId: string;
   /** 用户改写的判据文本;非空时一律盖过内置预设。 */
@@ -134,6 +141,10 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   packPlatforms: ["douyin", "xiaohongshu", "channels"], // 中文矩阵最常见的三件套
   variants: 1, // 多版=多倍导出时间+一次 LLM 调用,默认关
   clipLength: "standard",
+  customDurationSec: 30,
+  gameId: "auto",
+  gameName: "",
+  targetPlatform: "compare",
   genreId: "auto", // 出厂不指定品类:通用提示词里已让模型先自判内容类型
   genreCustom: "",
   briefFocus: "", // 点题出厂为空:不点题就按通用判据找
@@ -177,7 +188,10 @@ function load(): RenderPrefs {
         }
       }
       if (![1, 2, 3].includes(out.variants)) out.variants = 1;
-      if (!["short", "standard", "long"].includes(out.clipLength)) out.clipLength = "standard";
+      if (!["auto", "short", "standard", "long", "custom"].includes(out.clipLength)) out.clipLength = "standard";
+      out.customDurationSec = Number.isFinite(out.customDurationSec) ? Math.max(5, Math.min(180, Math.round(out.customDurationSec))) : 30;
+      if (!["auto", CUSTOM_GAME_ID, ...GAME_PROFILES.map((profile) => profile.id)].includes(out.gameId)) out.gameId = "auto";
+      if (!["compare", "tiktok", "instagram"].includes(out.targetPlatform)) out.targetPlatform = "compare";
       if (!["high", "standard", "compact"].includes(out.quality)) out.quality = "high";
       if (!["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"].includes(out.captionStyle)) out.captionStyle = "keyword";
       if (!["off", "volume", "premium"].includes(out.aiCover)) out.aiCover = "off";

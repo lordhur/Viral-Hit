@@ -20,16 +20,17 @@ import { probeMedia } from "@core/probe";
 import { planColorRender } from "@core/color";
 import { analysisVideoIdentity, type AnalysisVideoOptions } from "@core/analysis-video";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
-import { WhisperFrenchEngine } from "@core/transcribe/whisper";
+import { WhisperFrenchEngine, WhisperFrenchSmallEngine } from "@core/transcribe/whisper";
 import { ParaformerEngine } from "@core/transcribe/paraformer";
 import { FireRedEngine } from "@core/transcribe/firered";
 import { ElevenLabsEngine } from "@core/transcribe/elevenlabs";
 import { readTranscriptCache, writeTranscriptCache } from "@core/transcribe/cache";
 import { importSubtitleText } from "@core/subtitle-import";
 import { validateSubtitleInput } from "../shared/subtitle-import";
-import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, WHISPER_FR_MODEL, PARAFORMER_MODEL, FIRERED_MODEL, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "@core/models";
+import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, WHISPER_FR_MODEL, WHISPER_FR_SMALL_MODEL, PARAFORMER_MODEL, FIRERED_MODEL, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "@core/models";
 import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
+import { sanitizeDetectBrief } from "../shared/detection-brief";
 import { detectHighlights, chatComplete } from "@core/highlight/detect";
 import { listModels } from "@core/llm-models";
 import { reviewCandidatesVision } from "@core/highlight/review-vision";
@@ -661,6 +662,7 @@ const baseEvidenceCacheDir = (): string => join(app.getPath("userData"), "eviden
 /** catalog id → engine factory + its model asset (for install checks). */
 const ASR_ENGINES = {
   "whisper-fr": { make: () => new WhisperFrenchEngine(modelsRoot()), asset: WHISPER_FR_MODEL },
+  "whisper-fr-small": { make: () => new WhisperFrenchSmallEngine(modelsRoot()), asset: WHISPER_FR_SMALL_MODEL },
   sensevoice: { make: () => new SenseVoiceEngine(modelsRoot()), asset: SENSEVOICE_MODEL },
   paraformer: { make: () => new ParaformerEngine(modelsRoot()), asset: PARAFORMER_MODEL },
   fireredasr: { make: () => new FireRedEngine(modelsRoot()), asset: FIRERED_MODEL },
@@ -940,7 +942,7 @@ ipcMain.handle(
     }
     // 时长档:非法值回落标准档
     const clipLength =
-      length === "short" || length === "long" || length === "standard" ? length : undefined;
+      length === "auto" || length === "custom" || length === "short" || length === "long" || length === "standard" ? length : undefined;
     // 商品词:白名单清洗(字符串数组,单词 ≤30 字,最多 20 个)
     const productWords = Array.isArray(products)
       ? products.filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 30)).slice(0, 20)
@@ -957,15 +959,8 @@ ipcMain.handle(
             custom: typeof g.custom === "string" ? g.custom : undefined,
           }
         : undefined;
-    // 用户点题:白名单清洗(两段自由文本,截断由 core 侧 briefSection 兜)
-    const b = brief as { focus?: unknown; exclude?: unknown } | null | undefined;
-    const briefArg =
-      b && ((typeof b.focus === "string" && b.focus.trim()) || (typeof b.exclude === "string" && b.exclude.trim()))
-        ? {
-            focus: typeof b.focus === "string" ? b.focus.trim() : undefined,
-            exclude: typeof b.exclude === "string" ? b.exclude.trim() : undefined,
-          }
-        : undefined;
+    // Intent + game/platform/custom-duration fields share the HTTP boundary validator.
+    const briefArg = sanitizeDetectBrief(brief);
     const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory, genreArg, briefArg, performanceMemory);
     // 候选段画面复核(v0.12):每条候选一张接触表让 VL 看画面,画面分回流
     // 排序、看点进 reason。fail-open:失败/超时沿用原候选。
@@ -1119,6 +1114,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
         visualEvidence: c.visualEvidence,
         scoreDims: c.scoreDims,
         teaser: c.teaser,
+        formatComparison: c.formatComparison,
       },
     }));
   const exportSpecs = variantPlans

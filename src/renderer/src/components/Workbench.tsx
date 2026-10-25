@@ -186,6 +186,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
   const [showWatch, setShowWatch] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showCameraLayout, setShowCameraLayout] = useState(false);
+  const [cameraReturnToExport, setCameraReturnToExport] = useState(false);
   const [defaultOutDir, setDefaultOutDir] = useState("");
   const [showTranscriptTimeline, setShowTranscriptTimeline] = useState(false);
   const [transportCommand, setTransportCommand] = useState<PreviewTransportCommand | null>(null);
@@ -505,7 +506,15 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
           )}
         </div>
 
-        {transcript && tab !== "transcript" && <Inspector transcript={transcript} onRedetect={() => void run()} onOpenReview={setReviewId} />}
+        {transcript && tab !== "transcript" && (
+          <Inspector
+            transcript={transcript}
+            onRedetect={() => void run()}
+            onOpenReview={setReviewId}
+            cameraAvailable={file.hasVideo}
+            onOpenCamera={() => { setCameraReturnToExport(false); setShowCameraLayout(true); }}
+          />
+        )}
       </div>
 
       {transcript && candidates && candidates.length > 0 && (
@@ -538,6 +547,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
           onClose={() => setShowExportPanel(false)}
           onOpenBrand={() => setShowBrand(true)}
           onOpenCamera={() => {
+            setCameraReturnToExport(true);
             setShowExportPanel(false);
             setShowCameraLayout(true);
           }}
@@ -549,7 +559,8 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
           durationSec={durationSec}
           onClose={() => {
             setShowCameraLayout(false);
-            setShowExportPanel(true);
+            if (cameraReturnToExport) setShowExportPanel(true);
+            setCameraReturnToExport(false);
           }}
         />
       )}

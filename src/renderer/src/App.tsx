@@ -99,8 +99,10 @@ function ImportStage({ onImportFile }: { onImportFile: (file: ProbedFile) => Pro
       try {
         const info = await getApi().probeMedia(path);
         file = { path, ...info };
-      } catch {
-        setError(t("probeFailed"));
+      } catch (reason) {
+        // Keep the real filesystem/FFprobe cause: URL download can succeed and
+        // only fail at this handoff, so a fixed generic message hides the fix.
+        setError(errorText(reason, t("probeFailed")));
         setBusy(false);
         return;
       }

@@ -28,7 +28,8 @@ const USAGE = `Viral Hit CLI — clips locaux et gratuits, vos médias restent s
 Usage :
   pnpm cli transcribe <chemin-de-la-vidéo>
       Transcription locale avec Whisper français par défaut et reprise des fenêtres terminées
-      --engine whisper-fr|sensevoice|paraformer|fireredasr|qwen3
+      --engine whisper-fr|whisper-fr-small|sensevoice|paraformer|fireredasr|qwen3
+      whisper-fr-small : français plus précis pour débit rapide et vocabulaire gaming (modèle local plus lourd)
       --asr-url http://127.0.0.1:8766   service local Qwen3 facultatif
       --restart-transcription          abandonne la progression du moteur actuel et recommence
       transcribe / highlights / clip acceptent --subtitles <original.srt|original.vtt>
@@ -102,7 +103,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
     else if (a === "--restart-transcription") args.restart = true;
     else if (a === "--engine") {
       const value = rest[++i];
-      if (!["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"].includes(value)) throw new Error("--engine attend l’un de ces moteurs : whisper-fr | sensevoice | paraformer | fireredasr | qwen3");
+      if (!["whisper-fr", "whisper-fr-small", "sensevoice", "paraformer", "fireredasr", "qwen3"].includes(value)) throw new Error("--engine attend l’un de ces moteurs : whisper-fr | whisper-fr-small | sensevoice | paraformer | fireredasr | qwen3");
       args.engineId = value;
     } else if (a === "--asr-url") {
       const value = rest[++i];
@@ -259,6 +260,7 @@ async function main(signal?: AbortSignal): Promise<void> {
       recommended: c.recommended,
       reviewNote: c.reviewNote || undefined,
       visualEvidence: c.visualEvidence,
+      formatComparison: c.formatComparison,
     }));
     if (args.json) {
       process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);

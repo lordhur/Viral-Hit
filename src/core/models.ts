@@ -70,6 +70,15 @@ export const WHISPER_FR_MODEL: ModelAsset = {
   approxBytes: 207_557_382,
 };
 
+/** Whisper Small multilingue int8 — niveau français précis, toujours local. */
+export const WHISPER_FR_SMALL_MODEL: ModelAsset = {
+  id: "whisper-small-multilingual",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "sherpa-onnx-whisper-small",
+  approxBytes: 639_387_718,
+};
+
 /**
  * Paraformer-large zh/en int8 (Apache-2.0) via sherpa-onnx — the "more
  * accurate" local tier: noticeably lower zh CER than SenseVoice-Small,

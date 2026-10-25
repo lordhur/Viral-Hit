@@ -12,7 +12,7 @@ import { stat } from "fs/promises";
 import type { GlossaryEntry, LlmConfig, Transcript, HighlightCandidate } from "../shared/api-types";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { SenseVoiceEngine } from "./transcribe/sensevoice";
-import { WhisperFrenchEngine } from "./transcribe/whisper";
+import { WhisperFrenchEngine, WhisperFrenchSmallEngine } from "./transcribe/whisper";
 import { importSubtitleFile } from "./subtitle-import";
 import { readTranscriptCache, writeTranscriptCache } from "./transcribe/cache";
 import { detectHighlights } from "./highlight/detect";
@@ -95,13 +95,14 @@ export async function transcribeCached(
   const fileStat = { size: s.size, mtimeMs: s.mtimeMs };
   const applied = (t: Transcript): Transcript => applyGlossaryToTranscript(t, glossary ?? []).transcript;
   const engineId = asr.engineId ?? "whisper-fr";
-  if (!["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"].includes(engineId)) throw new Error("Ce moteur de transcription local n’est pas pris en charge");
+  if (!["whisper-fr", "whisper-fr-small", "sensevoice", "paraformer", "fireredasr", "qwen3"].includes(engineId)) throw new Error("Ce moteur de transcription local n’est pas pris en charge");
   const cached = !asr.restart && engineId !== "qwen3" ? await readTranscriptCache(cacheDir, videoPath, fileStat, engineId) : undefined;
   if (cached) return applied(cached);
   const engine = engineId === "qwen3" ? new QwenLocalEngine(asr.localServiceUrl)
     : engineId === "paraformer" ? new ParaformerEngine(modelsRoot)
     : engineId === "fireredasr" ? new FireRedEngine(modelsRoot)
     : engineId === "sensevoice" ? new SenseVoiceEngine(modelsRoot)
+    : engineId === "whisper-fr-small" ? new WhisperFrenchSmallEngine(modelsRoot)
     : new WhisperFrenchEngine(modelsRoot);
   const t = await engine.transcribe(videoPath, { ...asr, signal, cacheDir });
   if (engineId !== "qwen3") await writeTranscriptCache(cacheDir, videoPath, fileStat, engineId, t).catch(() => {});
@@ -246,6 +247,7 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
         recommended: c.recommended,
         reviewNote: c.reviewNote,
         visualEvidence: c.visualEvidence,
+        formatComparison: c.formatComparison,
       },
     })),
     outDir,

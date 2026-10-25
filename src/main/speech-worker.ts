@@ -1,6 +1,6 @@
 import { parentPort, workerData } from "worker_threads";
 import { SenseVoiceEngine } from "../core/transcribe/sensevoice";
-import { WhisperFrenchEngine } from "../core/transcribe/whisper";
+import { WhisperFrenchEngine, WhisperFrenchSmallEngine } from "../core/transcribe/whisper";
 import { ParaformerEngine } from "../core/transcribe/paraformer";
 import { FireRedEngine } from "../core/transcribe/firered";
 import { QwenLocalEngine } from "../core/transcribe/qwen-local";
@@ -17,6 +17,7 @@ async function run(): Promise<unknown> {
     : job.engineId === "paraformer" ? new ParaformerEngine(job.modelsRoot)
     : job.engineId === "fireredasr" ? new FireRedEngine(job.modelsRoot)
     : job.engineId === "sensevoice" ? new SenseVoiceEngine(job.modelsRoot)
+    : job.engineId === "whisper-fr-small" ? new WhisperFrenchSmallEngine(job.modelsRoot)
     : new WhisperFrenchEngine(job.modelsRoot);
   return engine.transcribe(job.filePath, {
     ...job.options, cacheDir: job.cacheDir, signal: abort.signal,

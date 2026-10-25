@@ -3,7 +3,7 @@ import { utilityDensity, utilityBoost } from "../../shared/utility-density";
 import type { Transcript, TranscriptSegment } from "../transcribe/types";
 import type { MediaSignals } from "../signals";
 import type { EvidenceClass } from "../genre";
-import { CLIP_LENGTH_RANGES } from "./prompt";
+import { resolveClipLengthRange } from "./prompt";
 import { fuseMoments, MOMENT_WEIGHTS, topMoments } from "./moments";
 import { endingUnfinished, openingDangles } from "./gate";
 import { assessFrenchVirality, isFrenchTranscript } from "./french-score";
@@ -113,7 +113,7 @@ function makeCandidate(
 }
 
 function textCandidates(transcript: Transcript, options: LocalFreeOptions): HighlightCandidate[] {
-  const range = CLIP_LENGTH_RANGES[options.length ?? "standard"];
+  const range = resolveClipLengthRange(options.length, options.brief?.customDurationSec);
   const segments = transcript.segments
     .filter((segment) => Number.isFinite(segment.startSec) && Number.isFinite(segment.endSec) && segment.endSec > segment.startSec && segment.text.trim())
     .sort((a, b) => a.startSec - b.startSec);
@@ -168,7 +168,7 @@ function textCandidates(transcript: Transcript, options: LocalFreeOptions): High
 
 function signalCandidates(transcript: Transcript, options: LocalFreeOptions): HighlightCandidate[] {
   if (!options.signals) return [];
-  const range = CLIP_LENGTH_RANGES[options.length ?? "standard"];
+  const range = resolveClipLengthRange(options.length, options.brief?.customDurationSec);
   const moments = topMoments(fuseMoments(options.signals, transcript.durationSec, {
     weights: MOMENT_WEIGHTS[options.evidence === "visual" ? "visual" : "reaction"],
     minSec: range.minSec,

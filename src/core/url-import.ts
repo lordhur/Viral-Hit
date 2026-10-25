@@ -6,9 +6,9 @@
  */
 import { createHash } from "crypto";
 import { spawn } from "child_process";
-import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from "fs/promises";
+import { chmod, mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
 import { isIP } from "net";
-import { basename, join, relative, resolve, sep } from "path";
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from "path";
 import { resolveFfmpegPath } from "./binaries";
 import type { UrlImportProgressEvent, UrlImportResult } from "../shared/api-types";
 
@@ -200,6 +200,66 @@ export function parseYtDlpProgress(line: string): UrlImportProgressEvent | null 
   };
 }
 
+const DOWNLOADED_MEDIA_EXTENSIONS = new Set([
+  ".mp4", ".m4v", ".mov", ".mkv", ".webm", ".ts", ".avi", ".flv",
+  ".mp3", ".m4a", ".wav", ".aac", ".flac", ".opus", ".ogg",
+]);
+
+function insideDirectory(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate);
+  return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel));
+}
+
+function importId(filePath: string): string {
+  const name = basename(filePath, extname(filePath));
+  return name.match(/\[([^\[\]]+)]\s*$/)?.[1] ?? "";
+}
+
+/**
+ * Resolve the file yt-dlp actually left on disk. Some extractor/post-processing
+ * paths report a relative or pre-rename filename (notably after Twitch muxing).
+ * Never trust that string blindly: try every reported path inside destDir, then
+ * recover only a real media file from this import, preferring the shared video id.
+ */
+export async function resolveImportedMediaPath(
+  reportedPaths: string[],
+  destDir: string,
+  startedAtMs = Date.now(),
+): Promise<string> {
+  const root = resolve(destDir);
+  const reported = [...new Set(reportedPaths.map((value) => value.trim()).filter(Boolean))];
+  for (const value of [...reported].reverse()) {
+    // yt-dlp normally prints an absolute after_move path, but a relative result
+    // is relative to the requested output directory — not Viral Hit's cwd.
+    const candidate = resolve(isAbsolute(value) ? value : join(root, value));
+    if (!insideDirectory(root, candidate)) continue;
+    const info = await stat(candidate).catch(() => null);
+    if (info?.isFile() && info.size > 0) return candidate;
+  }
+
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const candidates: Array<{ path: string; id: string; size: number; mtimeMs: number }> = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !DOWNLOADED_MEDIA_EXTENSIONS.has(extname(entry.name).toLowerCase())) continue;
+    const path = resolve(root, entry.name);
+    if (!insideDirectory(root, path)) continue;
+    const info = await stat(path).catch(() => null);
+    if (info?.isFile() && info.size > 0) {
+      candidates.push({ path, id: importId(entry.name), size: info.size, mtimeMs: info.mtimeMs });
+    }
+  }
+
+  const ids = new Set(reported.map(importId).filter(Boolean));
+  const sameImport = ids.size > 0 ? candidates.filter((candidate) => ids.has(candidate.id)) : [];
+  // A clock/filesystem tolerance covers Windows timestamp granularity. Without
+  // an id, only fresh files are eligible: an old unrelated video is never picked.
+  const fresh = candidates.filter((candidate) => candidate.mtimeMs >= startedAtMs - 15_000);
+  const eligible = sameImport.length > 0 ? sameImport : fresh;
+  eligible.sort((a, b) => b.mtimeMs - a.mtimeMs || b.size - a.size || a.path.localeCompare(b.path));
+  if (eligible[0]) return eligible[0].path;
+  throw new Error("url:invalid-download missing media path after yt-dlp post-processing");
+}
+
 /** Download one URL (never a playlist), merge to MP4 when needed, and return its verified local path. */
 export async function importMediaUrl(input: string, opts: UrlImportOptions): Promise<UrlImportResult> {
   const url = validateMediaUrl(input);
@@ -229,8 +289,9 @@ export async function importMediaUrl(input: string, opts: UrlImportOptions): Pro
     url,
   ];
 
+  const startedAtMs = Date.now();
   const child = spawn(binary, args, { stdio: ["ignore", "pipe", "pipe"] });
-  let outputPath = "";
+  const reportedPaths: string[] = [];
   let tail = "";
   let lineBuffer = "";
   const consume = (chunk: Buffer | string): void => {
@@ -240,7 +301,7 @@ export async function importMediaUrl(input: string, opts: UrlImportOptions): Pro
     for (const line of lines) {
       const progress = parseYtDlpProgress(line);
       if (progress) opts.onProgress?.(progress);
-      if (line.startsWith("hotclip-result:")) outputPath = line.slice("hotclip-result:".length).trim();
+      if (line.startsWith("hotclip-result:")) reportedPaths.push(line.slice("hotclip-result:".length).trim());
       if (/\[(?:Merger|VideoRemuxer|Fixup)/.test(line)) opts.onProgress?.({ stage: "merging" });
       if (line.trim()) tail = `${tail}\n${line.trim()}`.slice(-8000);
     }
@@ -266,13 +327,7 @@ export async function importMediaUrl(input: string, opts: UrlImportOptions): Pro
     opts.signal?.removeEventListener("abort", abort);
   }
 
-  if (!outputPath) throw new Error("url:invalid-download missing media path");
-  const absolute = resolve(outputPath);
-  const root = resolve(opts.destDir);
-  const within = relative(root, absolute);
-  if (!within || within.startsWith(`..${sep}`) || within === "..") throw new Error("url:invalid-download unsafe media path");
-  const info = await stat(absolute);
-  if (!info.isFile() || info.size === 0) throw new Error("url:invalid-download empty media file");
+  const absolute = await resolveImportedMediaPath(reportedPaths, opts.destDir, startedAtMs);
   opts.onProgress?.({ stage: "done", fraction: 1 });
   return { filePath: absolute };
 }

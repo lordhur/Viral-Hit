@@ -92,6 +92,9 @@ describe("local speech engine options", () => {
   it("parses the optional service and explicit restart", () => {
     expect(parseCliArgs(["transcribe", "source.mp4", "--engine", "qwen3", "--asr-url", "http://127.0.0.1:8766", "--restart-transcription"])).toMatchObject({ engineId: "qwen3", localServiceUrl: "http://127.0.0.1:8766", restart: true });
   });
+  it("accepts the free precise French Whisper tier", () => {
+    expect(parseCliArgs(["transcribe", "source.mp4", "--engine", "whisper-fr-small"])).toMatchObject({ engineId: "whisper-fr-small" });
+  });
   it("rejects unsupported engines and remote service URLs", () => {
     expect(() => parseCliArgs(["transcribe", "source.mp4", "--engine", "unknown"])).toThrow();
     expect(() => parseCliArgs(["transcribe", "source.mp4", "--asr-url", "https://example.com"])).toThrow();

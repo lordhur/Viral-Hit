@@ -8,7 +8,8 @@
  * own language. Pure builders, testable.
  */
 import type { Transcript } from "../transcribe/types";
-import type { ClipLength } from "../../shared/api-types";
+import type { ClipLength, DetectBrief } from "../../shared/api-types";
+import { gamingFormatPromptSection } from "./gaming-format";
 import type { MediaSignals } from "../signals";
 import { referencePromptSection, type ReferenceProfile } from "../reference";
 import { reviewMemorySection, type ReviewRecord } from "../review-memory";
@@ -131,12 +132,26 @@ export function isChineseTranscript(transcript: Transcript): boolean {
   return sample.length > 0 && cjk / sample.length > 0.3;
 }
 
-/** 三档时长目标:短=快节奏竖屏(抖音/TikTok 完播友好),标准=现默认,长=B站/播客金句段。 */
+/** Broad automatic bounds plus three legacy presets and a phrase-safe custom target. */
 export const CLIP_LENGTH_RANGES: Record<ClipLength, { minSec: number; maxSec: number }> = {
+  auto: { minSec: 6, maxSec: 90 },
   short: { minSec: 10, maxSec: 30 },
   standard: { minSec: 8, maxSec: 40 },
   long: { minSec: 40, maxSec: 90 },
+  custom: { minSec: 6, maxSec: 90 },
 };
+
+/** Resolve a custom target with tolerance for complete ASR sentences/actions. */
+export function resolveClipLengthRange(
+  length: ClipLength = "standard",
+  customDurationSec?: number,
+): { minSec: number; maxSec: number } {
+  if (length !== "custom") return CLIP_LENGTH_RANGES[length];
+  const requested = Number(customDurationSec);
+  const target = Number.isFinite(requested) ? Math.max(5, Math.min(180, Math.round(requested))) : 30;
+  const tolerance = Math.max(2, Math.min(12, Math.round(target * 0.15)));
+  return { minSec: Math.max(4, target - tolerance), maxSec: Math.min(180, target + tolerance) };
+}
 
 export function highlightSystemPrompt(
   transcript: Transcript,
@@ -145,20 +160,29 @@ export function highlightSystemPrompt(
   reference?: ReferenceProfile,
   reviewMemory?: ReviewRecord[],
   genre?: { id?: string; custom?: string },
-  brief?: { focus?: string; exclude?: string },
+  brief?: DetectBrief,
   performanceMemory?: PerformanceEntry[]
 ): string {
   const zh = isChineseTranscript(transcript);
   let base = zh ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
-  if (length !== "standard") {
-    // 时长行按档改写(硬约束进 system prompt,选段时就按目标节奏挑)
-    const { minSec, maxSec } = CLIP_LENGTH_RANGES[length];
+  if (length === "auto") {
+    base = base
+      .replace("时长 8~40 秒", "时长由内容完整性决定(通常 6~90 秒,不设固定档)")
+      .replace("Length 8–40 seconds", "Duration follows content completeness (usually 6–90 seconds, no fixed preset)");
+  } else if (length === "custom") {
+    const { minSec, maxSec } = resolveClipLengthRange(length, brief?.customDurationSec);
+    base = base
+      .replace("时长 8~40 秒", `目标时长 ${minSec}~${maxSec} 秒(允许为完整句子和动作留容差)`)
+      .replace("Length 8–40 seconds", `Target length ${minSec}–${maxSec} seconds (tolerance allows complete sentences/actions)`);
+  } else if (length !== "standard") {
+    const { minSec, maxSec } = resolveClipLengthRange(length);
     base = base
       .replace("时长 8~40 秒", `时长 ${minSec}~${maxSec} 秒(硬要求,宁短勿超)`)
       .replace("Length 8–40 seconds", `Length ${minSec}–${maxSec} seconds (hard requirement)`);
   }
   // 品类判据:不同品类连"该信哪路证据"都不一样,放在通用判据之后覆盖它
   if (genre) base += genreSection(genre.id, zh, genre.custom);
+  base += gamingFormatPromptSection(brief, genre?.id, zh);
   if (products.length > 0) base += productSection(products, zh);
   // 用户点题:明确的人工意图,优先级压过通用判据(对齐 OpusClip Contextual Prompting)
   base += briefSection(brief, zh);
@@ -210,7 +234,7 @@ export const BRIEF_MAX_CHARS = 300;
  * 这是唯一一段真正的人工意图,优先级要压过所有自动判据——但排除不等于
  * 无中生有:重点内容在素材里真不存在时宁可少给,不许硬凑。
  */
-export function briefSection(brief: { focus?: string; exclude?: string } | undefined, zh: boolean): string {
+export function briefSection(brief: DetectBrief | undefined, zh: boolean): string {
   const focus = brief?.focus?.trim().slice(0, BRIEF_MAX_CHARS) ?? "";
   const exclude = brief?.exclude?.trim().slice(0, BRIEF_MAX_CHARS) ?? "";
   if (!focus && !exclude) return "";

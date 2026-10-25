@@ -65,6 +65,7 @@ const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
 
 const ENGINE_TEXT: Record<string, { name: string; desc: string }> = {
   "whisper-fr": { name: "engineWhisperFrName", desc: "engineWhisperFrDesc" },
+  "whisper-fr-small": { name: "engineWhisperFrSmallName", desc: "engineWhisperFrSmallDesc" },
   sensevoice: { name: "engineSensevoiceName", desc: "engineSensevoiceDesc" },
   paraformer: { name: "engineParaformerName", desc: "engineParaformerDesc" },
   qwen3: { name: "engineQwenName", desc: "engineQwenDesc" },

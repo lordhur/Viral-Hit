@@ -18,6 +18,7 @@ import {
   type ModelAsset,
   SENSEVOICE_MODEL,
   WHISPER_FR_MODEL,
+  WHISPER_FR_SMALL_MODEL,
   PARAFORMER_MODEL,
   FIRERED_MODEL,
   YUNET_MODEL,
@@ -53,6 +54,7 @@ export interface DoctorReport {
 type DoctorLabel = { zh: string; en: string; fr: string };
 const MODEL_ROWS: Array<{ asset: ModelAsset; label: DoctorLabel; core: boolean }> = [
   { asset: WHISPER_FR_MODEL, label: { zh: "法语转写 Whisper(默认档)", en: "French Whisper transcription (default)", fr: "Transcription française Whisper (défaut)" }, core: true },
+  { asset: WHISPER_FR_SMALL_MODEL, label: { zh: "法语转写 Whisper Small(精准档)", en: "French Whisper Small transcription (accurate)", fr: "Transcription française Whisper Small (précise)" }, core: false },
   { asset: SENSEVOICE_MODEL, label: { zh: "转写 SenseVoice(多语种快速档)", en: "SenseVoice transcription (fast multilingual)", fr: "Transcription SenseVoice (multilingue rapide)" }, core: false },
   { asset: YUNET_MODEL, label: { zh: "人脸检测 YuNet(竖屏取景)", en: "YuNet face detection (vertical framing)", fr: "Détection des visages YuNet (cadrage vertical)" }, core: true },
   { asset: EMOTION_MODEL, label: { zh: "表情识别 FER+(爆点信号)", en: "FER+ facial emotion (highlight signal)", fr: "Émotions du visage FER+ (moments forts)" }, core: true },

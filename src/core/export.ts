@@ -9,6 +9,7 @@ import { promisify } from "util";
 import { tmpdir } from "os";
 import { join, basename } from "path";
 import { resolveFfmpegPath } from "./binaries";
+import type { GamingFormatComparison } from "../shared/api-types";
 
 const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip, concatClips, type CutOptions } from "./cut";
@@ -142,6 +143,7 @@ export interface ExportClipSpec {
     };
     scoreDims?: { hook: number; flow: number; value: number; trend: number };
     teaser?: string;
+    formatComparison?: GamingFormatComparison;
   };
 }
 

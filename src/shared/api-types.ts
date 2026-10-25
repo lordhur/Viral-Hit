@@ -182,15 +182,39 @@ export interface LlmConfig {
   provider?: LlmProvider;
 }
 
-/** 切片时长档:不同平台/账号定位的节奏(短=快节奏竖屏,长=B站/播客金句段)。 */
-export type ClipLength = "short" | "standard" | "long";
+/** Duration: automatic, three presets, or a custom target bounded by phrase-safe cuts. */
+export type ClipLength = "auto" | "short" | "standard" | "long" | "custom";
+export type TargetPlatform = "compare" | "tiktok" | "instagram";
 
-/** 用户点题(v0.13):自然语言告诉 AI 本场重点找什么/明确不要什么。 */
+/** User intent plus local game/platform format context. */
 export interface DetectBrief {
-  /** 重点找:「只要讲到售后的部分」「重点找他聊创业失败的段落」。 */
   focus?: string;
-  /** 明确排除:「不要抽奖和念弹幕」「排除开头暖场」。 */
   exclude?: string;
+  /** Built-in game profile id, auto for generic gaming, custom with gameName. */
+  gameId?: string;
+  gameName?: string;
+  /** Ranking target; compare still exposes both platform scores. */
+  targetPlatform?: TargetPlatform;
+  /** Seconds, used only when ClipLength is custom. */
+  customDurationSec?: number;
+}
+
+export interface PlatformFormatFit {
+  platform: "tiktok" | "instagram";
+  /** 0–100 editorial format fit, never a view/virality prediction. */
+  score: number;
+  formatId: string;
+  formatLabel: string;
+  reasons: string[];
+}
+
+export interface GamingFormatComparison {
+  gameId: string;
+  gameLabel: string;
+  targetPlatform: TargetPlatform;
+  method: "local-format-heuristic";
+  tiktok: PlatformFormatFit;
+  instagram: PlatformFormatFit;
 }
 
 /** 两级漏斗第一级:本地小模型端点(Ollama 等 OpenAI 兼容接口,通常免 Key)。 */
@@ -318,6 +342,8 @@ export interface HighlightCandidate {
   gateNotes?: string[];
   /** 实用密度(v0.14 第十路):达线即「值得收藏」,发布文案转收藏/搜索导向。 */
   utility?: { score: number; hits: string[] };
+  /** Local TikTok/Instagram format-fit comparison for the selected game. */
+  formatComparison?: GamingFormatComparison;
   /** 用户手动调过切点(审阅台/微调按钮):导出时跳过镜头吸附,尊重人的决定。 */
   manualBounds?: boolean;
 }

@@ -7,14 +7,14 @@ import type { MediaSignals } from "../signals";
 import type { ReferenceProfile } from "../reference";
 import type { ReviewRecord } from "../review-memory";
 import type { PerformanceEntry } from "../performance-memory";
-import type { HighlightCandidate, LlmConfig, PrefilterConfig, FunnelStats, ClipLength } from "../../shared/api-types";
+import type { HighlightCandidate, LlmConfig, PrefilterConfig, FunnelStats, ClipLength, DetectBrief } from "../../shared/api-types";
 import {
   highlightSystemPrompt,
   buildHighlightPrompt,
   reviewSystemPrompt,
   buildReviewPrompt,
   extractJson,
-  CLIP_LENGTH_RANGES,
+  resolveClipLengthRange,
   isChineseTranscript,
   MOMENT_SYSTEM_PROMPT_ZH,
   MOMENT_SYSTEM_PROMPT_EN,
@@ -25,6 +25,7 @@ import { prefilterTranscript } from "./prefilter";
 import { detectClipCommands } from "./commands";
 import { applyRuleGate, type GateTier } from "./gate";
 import { detectLocalFree } from "./local-free";
+import { applyGamingFormatSignal } from "./gaming-format";
 import { utilityDensity, utilityBoost, UTILITY_SAVE_WORTHY } from "../../shared/utility-density";
 import { clipDurationSec, MAX_PIECES, type ClipPiece } from "../../shared/pieces";
 import { isLocalBaseUrl } from "../../shared/llm-preflight";
@@ -40,11 +41,14 @@ import {
 } from "./moments";
 
 /**
- * 时长档过滤界:目标范围外放容差(下 0.5×/上 1.5×)——LLM 轻微超标的候选
- * 留给用户决定,离谱的直接丢;绝对下限 4 秒防碎片。
+ * 预设时长过滤界:目标范围外放容差(下 0.5×/上 1.5×);自定义范围已含
+ * 句子/动作容差,不再二次放宽。绝对下限 4 秒防碎片。
  */
-export function clipLengthBounds(length: ClipLength = "standard"): { lo: number; hi: number } {
-  const r = CLIP_LENGTH_RANGES[length];
+export function clipLengthBounds(length: ClipLength = "standard", customDurationSec?: number): { lo: number; hi: number } {
+  const r = resolveClipLengthRange(length, customDurationSec);
+  // The custom range already contains its sentence/action tolerance; do not
+  // widen it a second time or a 30 s request could become a 53 s clip.
+  if (length === "custom") return { lo: r.minSec, hi: r.maxSec };
   return { lo: Math.max(4, Math.round(r.minSec * 0.5)), hi: Math.round(r.maxSec * 1.5) };
 }
 
@@ -613,8 +617,8 @@ export async function detectHighlights(
   reviewMemory?: ReviewRecord[],
   /** 直播品类判据(内置预设 id + 用户自定义文本,见 core/genre.ts)。 */
   genre?: { id?: string; custom?: string },
-  /** 用户点题:重点找什么/明确排除什么(v0.13,见 prompt.briefSection)。 */
-  brief?: { focus?: string; exclude?: string },
+  /** Intent, selected game, target platform and custom duration. */
+  brief?: DetectBrief,
   /** 用户导入的真实发布表现(本地记忆,只注入高/低表现摘要)。 */
   performanceMemory?: PerformanceEntry[]
 ): Promise<DetectOutcome> {
@@ -634,9 +638,9 @@ export async function detectHighlights(
   // données par les signaux locaux ; aucun jeton n'est demandé ni simulé.
   if (llm.provider === "builtin") {
     const evidence: EvidenceClass = genrePreset(normalizeGenreId(genre?.id)).evidence;
-    const ranked = dropOverlaps(detectLocalFree(transcript, {
+    const ranked = dropOverlaps(applyGamingFormatSignal(detectLocalFree(transcript, {
       length, products, signals, evidence, brief,
-    })).sort((a, b) => b.score - a.score).slice(0, 8);
+    }), brief, genre?.id)).sort((a, b) => b.score - a.score).slice(0, 8);
     const kept = dropOverlaps(ranked);
     return { candidates: applyRuleGate(transcript, normalizeScores(kept), false, "fr") };
   }
@@ -666,7 +670,7 @@ export async function detectHighlights(
     signal
   );
 
-  const { lo, hi } = clipLengthBounds(length);
+  const { lo, hi } = clipLengthBounds(length, brief?.customDurationSec);
   const candidates: HighlightCandidate[] = [];
   for (const sel of selections) {
     const resolved = resolveSelection(transcript, sel);
@@ -706,7 +710,7 @@ export async function detectHighlights(
   const ratio = speechRatio(transcript);
   let momentKept: HighlightCandidate[] = [];
   if (signals && shouldRunMoments(evidence, ratio, textKept.length)) {
-    momentKept = await detectMoments(transcript, llm, signals, evidence, length, signal).catch((e) => {
+    momentKept = await detectMoments(transcript, llm, signals, evidence, length, signal, brief?.customDurationSec).catch((e) => {
       if (signal?.aborted) throw e;
       return [];
     });
@@ -728,7 +732,7 @@ export async function detectHighlights(
   // (只降档到 review、不 drop,fail-open 见 gate.ts)。
   // 实用密度在复评之后加分(复评会覆写 score),在归一化之前(要影响排序)。
   const finish = (list: HighlightCandidate[]): HighlightCandidate[] =>
-    applyRuleGate(transcript, normalizeScores(applyUtilitySignal(list, zh)), zh);
+    applyRuleGate(transcript, normalizeScores(applyUtilitySignal(applyGamingFormatSignal(list, brief, genre?.id), zh)), zh);
   const reviewable = kept.filter((c) => c.boundary !== "signal");
   if (reviewable.length === 0) return { candidates: finish(kept), funnel };
   try {
@@ -779,9 +783,10 @@ export async function detectMoments(
   signals: MediaSignals,
   evidence: EvidenceClass,
   length: ClipLength | undefined,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  customDurationSec?: number,
 ): Promise<HighlightCandidate[]> {
-  const range = CLIP_LENGTH_RANGES[length ?? "standard"];
+  const range = resolveClipLengthRange(length, customDurationSec);
   // words 类走到这里说明是"说话太少/文本通道没产出"触发的,按 reaction 权重兜底
   const weights = MOMENT_WEIGHTS[evidence === "visual" ? "visual" : "reaction"];
   // 融合出来的全量时刻按热度收敛到提示词上限——给太多选项反而让模型交白卷

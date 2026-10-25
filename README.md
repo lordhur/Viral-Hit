@@ -55,15 +55,18 @@ Le desktop et le serveur partagent le même répertoire de données Viral Hit. P
 ### 1. Clips viraux
 
 - Import MP4, MOV, MKV, WebM, FLV ou audio ; import d’URL et de sous-titres SRT/WebVTT.
-- **Transcription française par défaut avec Whisper Base local** : environ 198 Mio au premier lancement, puis hors ligne et sans clé. SenseVoice, Paraformer, FireRedASR et Qwen3 local restent disponibles pour les autres besoins.
+- **Transcription française locale gratuite** : Whisper Base (198 Mio) par défaut, ou **Whisper Small — français précis** (610 Mio, recommandé pour le débit rapide et le vocabulaire gaming). Le modèle choisi est téléchargé une fois, puis fonctionne hors ligne sans clé. SenseVoice, Paraformer, FireRedASR et Qwen3 local restent disponibles pour les autres besoins.
 - Détection de moments forts par le **moteur intégré gratuit**, avec preuves textuelles et audiovisuelles ; Ollama local reste une option, mais aucun jeton cloud n’est utilisé par défaut.
+- **Jeu, plateforme et durée réglables** : formats éditoriaux propres aux jeux courants, cible TikTok ou Instagram Reels, comparaison des deux, durée automatique, trois préréglages ou cible personnalisée. Les scores de format sont des heuristiques locales expliquées, jamais des vues ou des performances en direct inventées.
 - Révision avant export, montage multi-extraits, recadrage 9:16, suivi de visage, sous-titres, jump cut, nettoyage audio, musique, habillage de marque et variantes.
 - Export MP4, couverture, SRT, timeline/EDL, brouillon Jianying, packs de publication et de série.
 - Contrôle qualité : durée, noir, silence, gel, loudness, coupures de parole et alertes de contenu ; réparations bornées et consignées.
 
 **Mode automatique par score :** le bouton **Créer les shorts automatiquement** transcrit la source, classe les moments par viralité et exporte jusqu’aux six meilleurs clips non chevauchants, sans retenir ceux qui exigent une révision. Le moteur gratuit donne davantage de poids à l’accroche, au sens, à la densité d’information, à la structure et au débit de la transcription française ; les pics audio/vidéo restent des preuves complémentaires.
 
-**Caméra au-dessus du gameplay :** dans les réglages d’export, activez **Caméra au-dessus du gameplay**, puis cliquez sur **Positionner le cadre caméra**. Déplacez le cadre sur la vidéo horizontale, tirez sa poignée orange pour le redimensionner et vérifiez l’aperçu 9:16 à différents moments. L’export 1080×1920 place ce cadre en haut et le gameplay de la même source en dessous. Le cadrage est conservé dans les préférences et les préréglages d’export.
+**Caméra au-dessus du gameplay :** la carte **Caméra + gameplay vertical** est visible directement dans la colonne de droite du workbench. Cliquez sur **Activer et positionner** (ou **Positionner le cadre caméra** lorsqu’elle est active). Déplacez le cadre sur la vidéo horizontale, tirez sa poignée orange pour le redimensionner et vérifiez l’aperçu 9:16 à différents moments. L’export 1080×1920 place ce cadre en haut et le gameplay de la même source en dessous. Le réglage reste aussi disponible dans les options d’export et est conservé dans les préférences et préréglages.
+
+**Import Twitch et autres URL publiques :** après le muxage, Viral Hit vérifie le fichier réellement présent dans son dossier d’import, y compris lorsque yt-dlp rapporte un chemin relatif, un ancien nom ou aucun chemin final. Seuls les médias du téléchargement courant ou portant le même identifiant sont retrouvés ; les erreurs de lecture FFprobe conservent leur cause française. Les vidéos privées, payantes ou soumises à autorisation ne sont pas contournées.
 
 ### 2. Récap vidéo narré
 
@@ -186,7 +189,7 @@ Ordre de résolution :
 
 - Le style de sous-titres **Bubble** nécessite le renderer offscreen Electron ; les autres styles natifs sont disponibles dans le navigateur.
 - Les dialogues de fichiers natifs et certaines automations desktop ne sont pas reproduits artificiellement dans le navigateur.
-- Whisper Base produit le texte français localement ; lorsque le modèle ne fournit pas de temps natifs, les temps des mots sont marqués comme estimés et peuvent être réalignés.
+- Whisper Base ou Small produit le texte français localement ; Small privilégie la précision au prix d’un calcul plus lent. Lorsque le modèle ne fournit pas de temps natifs, les temps des mots sont marqués comme estimés et peuvent être réalignés.
 - La détection intégrée ne remplace pas un grand modèle créatif pour le plan narratif : le récap exige la configuration locale avancée décrite ci-dessus.
 - Les exports sont **prêts à publier** ; Viral Hit ne publie pas automatiquement sur vos comptes sociaux.
 

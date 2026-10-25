@@ -42,6 +42,9 @@ export function localizeErrorMessage(reason: unknown, fallback = GENERIC): strin
     return "Le composant d’import n’a pas pu démarrer. Vérifiez que l’antivirus ne bloque pas yt-dlp, puis relancez l’import.";
   }
   if (/url:invalid-download|no (?:audio|video)|aucun flux|sans piste/i.test(value)) {
+    if (/missing media path|post-processing|unsafe media path/i.test(value)) {
+      return "Le téléchargement est terminé, mais Viral Hit ne retrouve pas son fichier final dans le dossier d’import. Ne déplacez pas les fichiers pendant l’import, vérifiez l’antivirus et l’espace disque, puis réessayez. Vous pouvez aussi sélectionner manuellement la vidéo téléchargée.";
+    }
     return "Le fichier récupéré ne contient pas de flux audio ou vidéo exploitable. Essayez une autre URL publique ou importez directement le fichier.";
   }
   if (/url:download|yt-dlp|unsupported url|video unavailable|private video|sign in|http error 4\d\d|getaddrinfo|name or service not known|nodename nor servname/i.test(value)) {

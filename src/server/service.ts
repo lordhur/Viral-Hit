@@ -10,6 +10,7 @@ import type {
   Transcript,
 } from "../shared/api-types";
 import { ASR_CATALOG } from "../shared/asr-catalog";
+import { sanitizeDetectBrief } from "../shared/detection-brief";
 import { QUALITY_CRF } from "../shared/api-types";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { wordsInPieces } from "../shared/pieces";
@@ -71,7 +72,7 @@ import { sanitizeBrand } from "../core/brand";
 import { runDoctor } from "../core/doctor";
 import { clearRenderCache } from "../core/render-cache";
 import { clearEvidenceIndex } from "../core/evidence-index";
-import { ensureModel, isModelInstalled, FIRERED_MODEL, PARAFORMER_MODEL, SENSEVOICE_MODEL, WHISPER_FR_MODEL } from "../core/models";
+import { ensureModel, isModelInstalled, FIRERED_MODEL, PARAFORMER_MODEL, SENSEVOICE_MODEL, WHISPER_FR_MODEL, WHISPER_FR_SMALL_MODEL } from "../core/models";
 import { inspectModels, moveModelsDir } from "../core/models-inventory";
 import { defaultModelsRoot, readAppSettings, writeAppSettings } from "../core/app-settings";
 import { qwenHealth } from "../core/transcribe/qwen-local";
@@ -81,7 +82,7 @@ import { assertInside, defaultExportDir, serverDataDir, serverRoot } from "./con
 import type { EventHub } from "./events";
 import { localizeErrorMessage, localizeUrlImportError } from "../shared/french-errors";
 
-const ASR_ASSETS = { "whisper-fr": WHISPER_FR_MODEL, sensevoice: SENSEVOICE_MODEL, paraformer: PARAFORMER_MODEL, fireredasr: FIRERED_MODEL } as const;
+const ASR_ASSETS = { "whisper-fr": WHISPER_FR_MODEL, "whisper-fr-small": WHISPER_FR_SMALL_MODEL, sensevoice: SENSEVOICE_MODEL, paraformer: PARAFORMER_MODEL, fireredasr: FIRERED_MODEL } as const;
 
 function stringArg(value: unknown, label: string): string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} : valeur obligatoire`);
@@ -166,7 +167,7 @@ export class LocalService {
     const pf = args[4] as { baseUrl?: unknown; model?: unknown } | null | undefined;
     const prefilter = pf && typeof pf.baseUrl === "string" && typeof pf.model === "string" && pf.baseUrl && pf.model
       ? { baseUrl: pf.baseUrl, model: pf.model } : null;
-    const length = args[6] === "short" || args[6] === "long" || args[6] === "standard" ? args[6] : undefined;
+    const length = args[6] === "auto" || args[6] === "custom" || args[6] === "short" || args[6] === "long" || args[6] === "standard" ? args[6] : undefined;
     const products = Array.isArray(args[7]) ? args[7].filter((v): v is string => typeof v === "string" && !!v.trim()).map((v) => v.trim().slice(0, 30)).slice(0, 20) : [];
     const referencePath = typeof args[8] === "string" && args[8] ? await this.media(args[8]) : undefined;
     let reference;
@@ -177,7 +178,7 @@ export class LocalService {
       } catch (error) { referenceError = error instanceof Error ? error.message : String(error); }
     }
     const genre = args[9] as { id?: string; custom?: string } | null | undefined;
-    const brief = args[10] as { focus?: string; exclude?: string } | null | undefined;
+    const brief = sanitizeDetectBrief(args[10]);
     let signals = filePath ? await this.warmSignals(filePath) : undefined;
     let visionStats;
     let emotionStats;
@@ -294,7 +295,8 @@ export class LocalService {
         translation: translations ? clipTranslationLines(translatable, translations, clip.startSec - 1.5, clip.endSec + 1.5) : undefined,
         publish: publishCopies?.get(clip.id),
         meta: { hook: clip.hook, score: clip.score, reason: clip.reason, text: clip.text, recommended: clip.recommended,
-          reviewNote: clip.reviewNote, visualEvidence: clip.visualEvidence, scoreDims: clip.scoreDims, teaser: clip.teaser },
+          reviewNote: clip.reviewNote, visualEvidence: clip.visualEvidence, scoreDims: clip.scoreDims, teaser: clip.teaser,
+          formatComparison: clip.formatComparison },
       }));
       const specs = variantPlans ? expandClipSpecs(baseSpecs, variantPlans, Boolean(opts.publishCopy?.llm?.baseUrl && opts.publishCopy.llm.model), !opts.flashForward) : baseSpecs;
       const render: ExportRenderOptions = {

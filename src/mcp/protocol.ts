@@ -39,7 +39,7 @@ export const MCP_TOOLS: McpToolDef[] = [
       type: "object",
       properties: {
         videoPath: { type: "string", description: "Chemin absolu de la vidéo locale" },
-        engineId: { type: "string", enum: ["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"], description: "Moteur ASR local : whisper-fr par défaut pour le français ; qwen3 nécessite son service local optionnel." },
+        engineId: { type: "string", enum: ["whisper-fr", "whisper-fr-small", "sensevoice", "paraformer", "fireredasr", "qwen3"], description: "Moteur ASR local : whisper-fr par défaut, whisper-fr-small pour un français plus précis ; qwen3 nécessite son service local optionnel." },
         localServiceUrl: { type: "string", description: "Adresse du service Qwen3 local facultatif, uniquement sur 127.0.0.1 ou ::1 ; http://127.0.0.1:8766 par défaut." },
         restart: { type: "boolean", description: "Recommence la transcription sans réutiliser la progression du moteur actuel ; la reprise est activée par défaut." },
         subtitlePath: { type: "string", description: "Chemin absolu facultatif de sous-titres SRT/WebVTT UTF-8 alignés sur le média (5 Mo maximum, une piste, sans chevauchement). Ignore l’ASR ; les temps des mots dans les phrases sont estimés et doivent être vérifiés." },
@@ -62,7 +62,7 @@ export const MCP_TOOLS: McpToolDef[] = [
       type: "object",
       properties: {
         videoPath: { type: "string", description: "Chemin absolu de la vidéo locale" },
-        engineId: { type: "string", enum: ["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"], description: "Moteur ASR local : whisper-fr par défaut pour le français ; qwen3 nécessite son service local optionnel." },
+        engineId: { type: "string", enum: ["whisper-fr", "whisper-fr-small", "sensevoice", "paraformer", "fireredasr", "qwen3"], description: "Moteur ASR local : whisper-fr par défaut, whisper-fr-small pour un français plus précis ; qwen3 nécessite son service local optionnel." },
         localServiceUrl: { type: "string", description: "Adresse du service Qwen3 local facultatif, uniquement sur 127.0.0.1 ou ::1 ; http://127.0.0.1:8766 par défaut." },
         restart: { type: "boolean", description: "Recommence la transcription sans réutiliser la progression du moteur actuel ; la reprise est activée par défaut." },
         subtitlePath: { type: "string", description: "Chemin absolu facultatif de sous-titres SRT/WebVTT UTF-8 alignés sur le média (5 Mo maximum, une piste, sans chevauchement). Ignore l’ASR ; les temps des mots dans les phrases sont estimés et doivent être vérifiés." },
@@ -80,7 +80,7 @@ export const MCP_TOOLS: McpToolDef[] = [
       type: "object",
       properties: {
         videoPath: { type: "string", description: "Chemin absolu du fichier vidéo ou audio local" },
-        engineId: { type: "string", enum: ["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"], description: "Moteur ASR local : whisper-fr par défaut pour le français ; qwen3 nécessite son service local optionnel." },
+        engineId: { type: "string", enum: ["whisper-fr", "whisper-fr-small", "sensevoice", "paraformer", "fireredasr", "qwen3"], description: "Moteur ASR local : whisper-fr par défaut, whisper-fr-small pour un français plus précis ; qwen3 nécessite son service local optionnel." },
         localServiceUrl: { type: "string", description: "Adresse du service Qwen3 local facultatif, uniquement sur 127.0.0.1 ou ::1 ; http://127.0.0.1:8766 par défaut." },
         restart: { type: "boolean", description: "Recommence la transcription sans réutiliser la progression du moteur actuel ; la reprise est activée par défaut." },
         subtitlePath: { type: "string", description: "Sous-titres SRT/WebVTT UTF-8 facultatifs permettant d’ignorer l’ASR (5 Mo maximum, sans chevauchement) ; les temps internes sont estimés et doivent être vérifiés." },

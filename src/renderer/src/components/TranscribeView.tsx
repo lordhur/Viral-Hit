@@ -53,6 +53,7 @@ const STAGE_KEY: Record<TranscribeProgressEvent["stage"], string> = {
 /** catalog id → i18n name/desc keys (unknown ids fall back to raw id). */
 const ENGINE_TEXT: Record<string, { name: string; desc: string }> = {
   "whisper-fr": { name: "engineWhisperFrName", desc: "engineWhisperFrDesc" },
+  "whisper-fr-small": { name: "engineWhisperFrSmallName", desc: "engineWhisperFrSmallDesc" },
   sensevoice: { name: "engineSensevoiceName", desc: "engineSensevoiceDesc" },
   paraformer: { name: "engineParaformerName", desc: "engineParaformerDesc" },
   qwen3: { name: "engineQwenName", desc: "engineQwenDesc" },

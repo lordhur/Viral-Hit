@@ -33,7 +33,14 @@ export function useDetection(): { run: () => Promise<void> } {
         prefs.products,
         s.referencePath,
         { id: prefs.genreId, custom: prefs.genreCustom },
-        focus || exclude ? { focus: focus || undefined, exclude: exclude || undefined } : null,
+        {
+          focus: focus || undefined,
+          exclude: exclude || undefined,
+          gameId: prefs.gameId,
+          gameName: prefs.gameName.trim() || undefined,
+          targetPlatform: prefs.targetPlatform,
+          customDurationSec: prefs.customDurationSec,
+        },
         prefs.fullScan && vision.enabled
       );
       const st = useSession.getState();

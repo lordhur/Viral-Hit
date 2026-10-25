@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { checksumForAsset, parseYtDlpProgress, validateMediaUrl, ytDlpAsset } from "../url-import";
+import { createHash } from "crypto";
+import { mkdtemp, rm, utimes, writeFile } from "fs/promises";
+import { tmpdir } from "os";
+import { join, resolve } from "path";
+import { afterEach, describe, expect, it } from "vitest";
+import { checksumForAsset, importMediaUrl, parseYtDlpProgress, resolveImportedMediaPath, validateMediaUrl, ytDlpAsset } from "../url-import";
 import { localizeErrorMessage, localizeUrlImportError } from "../../shared/french-errors";
+
+const tempDirs: string[] = [];
+afterEach(async () => {
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
 
 describe("URL source validation", () => {
   it("accepts ordinary HTTP(S) video pages and normalizes them", () => {
@@ -64,6 +73,89 @@ describe("yt-dlp release assets", () => {
     const hash = "a".repeat(64);
     expect(checksumForAsset(`${"b".repeat(64)}  yt-dlp\n${hash} *yt-dlp_macos\n`, "yt-dlp_macos")).toBe(hash);
     expect(() => checksumForAsset(`${hash}  yt-dlp\n`, "yt-dlp.exe")).toThrow(/missing/);
+  });
+});
+
+describe("résolution du fichier final yt-dlp", () => {
+  async function fixture(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), "viral-hit-url-import-"));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  it("résout un chemin relatif dans le dossier d’import, pas dans le cwd", async () => {
+    const dir = await fixture();
+    await writeFile(join(dir, "Twitch [abc123].mp4"), "media");
+    await expect(resolveImportedMediaPath(["Twitch [abc123].mp4"], dir)).resolves.toBe(resolve(dir, "Twitch [abc123].mp4"));
+  });
+
+  it("retrouve le fichier muxé quand le chemin après téléchargement est obsolète", async () => {
+    const dir = await fixture();
+    const finalPath = join(dir, "Titre renommé [twitch-42].mp4");
+    await writeFile(finalPath, "merged media");
+    await writeFile(join(dir, "ancien [autre].mp4"), "old media");
+    const old = new Date(Date.now() - 60_000);
+    await utimes(join(dir, "ancien [autre].mp4"), old, old);
+    await expect(resolveImportedMediaPath([join(dir, "fragment supprimé [twitch-42].mkv")], dir, Date.now() - 1000))
+      .resolves.toBe(finalPath);
+  });
+
+  it("retrouve aussi le média frais si yt-dlp n’imprime aucun chemin final", async () => {
+    const dir = await fixture();
+    const finalPath = join(dir, "VOD Twitch.mp4");
+    await writeFile(finalPath, "fresh media");
+    await expect(resolveImportedMediaPath([], dir, Date.now() - 1000)).resolves.toBe(finalPath);
+  });
+
+  it("n’utilise jamais un ancien fichier sans identifiant correspondant", async () => {
+    const dir = await fixture();
+    await writeFile(join(dir, "ancien.mp4"), "old media");
+    const old = new Date(Date.now() - 60_000);
+    await utimes(join(dir, "ancien.mp4"), old, old);
+    await expect(resolveImportedMediaPath(["disparu.mp4"], dir, Date.now() - 1000)).rejects.toThrow("url:invalid-download");
+  });
+
+  it("refuse qu’un chemin rapporté sorte du stockage géré", async () => {
+    const dir = await fixture();
+    await expect(resolveImportedMediaPath(["../outside.mp4"], dir)).rejects.toThrow("url:invalid-download");
+  });
+});
+
+describe("import yt-dlp complet", () => {
+  it.skipIf(process.platform === "win32")("récupère le MP4 réel après un chemin Twitch obsolète", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "viral-hit-url-e2e-"));
+    tempDirs.push(dir);
+    const script = [
+      "#!/bin/sh",
+      "out=''",
+      'while [ "$#" -gt 0 ]; do',
+      '  if [ "$1" = "--output" ]; then shift; out=$1; fi',
+      "  shift",
+      "done",
+      "dest=${out%/*}",
+      'final="$dest/Twitch final [clip42].mp4"',
+      'printf "merged media" > "$final"',
+      'printf "[Merger] Merging formats\\n"',
+      'printf "hotclip-result:%s/obsolete [clip42].mkv\\n" "$dest"',
+    ].join("\n");
+    const asset = ytDlpAsset();
+    const checksum = createHash("sha256").update(script).digest("hex");
+    const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+      const url = String(input);
+      if (url.endsWith("/SHA2-256SUMS")) return new Response(`${checksum}  ${asset}\n`);
+      if (url.endsWith(`/${asset}`)) return new Response(script);
+      throw new Error(`Unexpected fake tool URL: ${url}`);
+    };
+    const stages: string[] = [];
+    const result = await importMediaUrl("https://www.twitch.tv/example/clip/clip42", {
+      toolsDir: join(dir, "tools"),
+      destDir: join(dir, "imports"),
+      fetchImpl: fetchImpl as typeof fetch,
+      onProgress: (event) => stages.push(event.stage),
+    });
+    expect(result.filePath).toBe(resolve(dir, "imports", "Twitch final [clip42].mp4"));
+    expect(stages).toContain("merging");
+    expect(stages.at(-1)).toBe("done");
   });
 });
 

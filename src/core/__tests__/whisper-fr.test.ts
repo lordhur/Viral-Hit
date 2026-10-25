@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ASR_CATALOG } from "../../shared/asr-catalog";
-import { WHISPER_FR_MODEL } from "../models";
+import { WHISPER_FR_MODEL, WHISPER_FR_SMALL_MODEL } from "../models";
 import { whisperWords } from "../transcribe/whisper";
 
 describe("transcription française Whisper", () => {
@@ -12,6 +12,19 @@ describe("transcription française Whisper", () => {
       approxBytes: 207_557_382,
     });
     expect(WHISPER_FR_MODEL.url).toContain("sherpa-onnx-whisper-base.tar.bz2");
+  });
+
+  it("propose un niveau Small local plus précis sans remplacer le choix existant", () => {
+    expect(ASR_CATALOG[0]?.id).toBe("whisper-fr");
+    expect(ASR_CATALOG.find((engine) => engine.id === "whisper-fr-small")).toMatchObject({
+      kind: "local", langs: ["fr"], uploads: false, accuracy: 3, sizeMB: 610,
+    });
+    expect(WHISPER_FR_SMALL_MODEL).toMatchObject({
+      id: "whisper-small-multilingual",
+      extractedDir: "sherpa-onnx-whisper-small",
+      approxBytes: 639_387_718,
+    });
+    expect(WHISPER_FR_SMALL_MODEL.url).toContain("sherpa-onnx-whisper-small.tar.bz2");
   });
 
   it("conserve le texte français et marque honnêtement les temps estimés", () => {

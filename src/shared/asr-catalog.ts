@@ -36,6 +36,15 @@ export const ASR_CATALOG: AsrEngineFacts[] = [
     uploads: false,
   },
   {
+    id: "whisper-fr-small",
+    kind: "local",
+    langs: ["fr"],
+    sizeMB: 610,
+    speed: 1,
+    accuracy: 3,
+    uploads: false,
+  },
+  {
     id: "sensevoice",
     kind: "local",
     langs: ["zh", "yue", "en", "ja", "ko"],

@@ -14,6 +14,7 @@ import {
   modelDir,
   SENSEVOICE_MODEL,
   WHISPER_FR_MODEL,
+  WHISPER_FR_SMALL_MODEL,
   PARAFORMER_MODEL,
   FIRERED_MODEL,
   YUNET_MODEL,
@@ -30,6 +31,7 @@ import {
 /** 全部可下载模型,按用户能理解的用途分组标签(界面直接展示这个顺序)。 */
 export const MODEL_CATALOG: Array<{ asset: ModelAsset; useKey: string }> = [
   { asset: WHISPER_FR_MODEL, useKey: "useAsrFrench" },
+  { asset: WHISPER_FR_SMALL_MODEL, useKey: "useAsrFrenchPrecise" },
   { asset: SENSEVOICE_MODEL, useKey: "useAsrFast" },
   { asset: PARAFORMER_MODEL, useKey: "useAsrAccurate" },
   { asset: FIRERED_MODEL, useKey: "useAsrDialect" },

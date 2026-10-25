@@ -18,6 +18,7 @@ import {
   LuTriangleAlert,
   LuShoppingCart,
   LuRefreshCw,
+  LuCrop,
 } from "react-icons/lu";
 import { useT, useLocaleStore } from "../../i18n/store";
 import { gateNoteText } from "../../i18n/errors";
@@ -25,10 +26,11 @@ import { getApi } from "../../api/provider";
 import { useSession } from "../../stores/session-store";
 import { useRenderPrefs } from "../../stores/render-prefs-store";
 import { GENRE_PRESETS, GENRE_CUSTOM_MAX_CHARS } from "../../../../core/genre";
+import { CUSTOM_GAME_ID, GAME_PROFILES } from "../../../../shared/gaming-formats";
 import { adjustCandidateBoundary } from "../../../../shared/boundary";
 import { clipDurationSec, isStitched } from "../../../../shared/pieces";
 import { summarizeTimingQuality, wordsForClip } from "../../../../shared/transcript-quality";
-import { SectionLabel, Segmented, SwitchRow } from "../ui";
+import { SectionLabel, SwitchRow } from "../ui";
 import type { ClipLength, HighlightCandidate, Transcript } from "../../../../shared/api-types";
 
 const GENRE_FR: Record<string, string> = {
@@ -224,6 +226,52 @@ function DetailTab({
         </div>
       )}
 
+      {c.formatComparison && (
+        <div className="flex flex-col gap-2 rounded-xl border border-ember/25 bg-ember/[0.035] p-2.5">
+          <SectionLabel>{th("formatComparisonTitle")}</SectionLabel>
+          <p className="text-[10.5px] font-semibold text-fg/85">{c.formatComparison.gameLabel}</p>
+          {[c.formatComparison.tiktok, c.formatComparison.instagram].map((fit) => (
+            <div key={fit.platform} className="rounded-lg border border-line/70 bg-panel-2/60 p-2">
+              <div className="flex items-center gap-2 text-[10.5px]">
+                <span className="font-bold">{fit.platform === "tiktok" ? "TikTok" : "Instagram Reels"}</span>
+                {c.formatComparison?.targetPlatform === fit.platform && <span className="chip rounded px-1.5 py-0.5 text-[9px] text-ember">{th("formatTarget")}</span>}
+                <span className="flex-1" />
+                <span className="font-mono font-bold tabular-nums">{fit.score}/100</span>
+              </div>
+              <p className="mt-1 text-[10.5px] text-fg/80">{fit.formatLabel}</p>
+              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-line/70">
+                <div className="flame-gradient h-full rounded-full" style={{ width: `${fit.score}%` }} />
+              </div>
+              {fit.reasons[0] && <p className="mt-1.5 text-[9.5px] leading-relaxed text-mut">{fit.reasons[0]}</p>}
+            </div>
+          ))}
+          <p className="text-[9.5px] leading-relaxed text-mut/75">{th("formatComparisonHint")}</p>
+        </div>
+      )}
+
+      {c.formatComparison && (
+        <div className="flex flex-col gap-2 rounded-xl border border-ember/25 bg-ember/[0.035] p-2.5">
+          <SectionLabel>{th("formatComparisonTitle")}</SectionLabel>
+          <p className="text-[10.5px] font-semibold text-fg/85">{c.formatComparison.gameLabel}</p>
+          {[c.formatComparison.tiktok, c.formatComparison.instagram].map((fit) => (
+            <div key={fit.platform} className="rounded-lg border border-line/70 bg-panel-2/60 p-2">
+              <div className="flex items-center gap-2 text-[10.5px]">
+                <span className="font-bold">{fit.platform === "tiktok" ? "TikTok" : "Instagram Reels"}</span>
+                {c.formatComparison?.targetPlatform === fit.platform && <span className="chip rounded px-1.5 py-0.5 text-[9px] text-ember">{th("formatTarget")}</span>}
+                <span className="flex-1" />
+                <span className="font-mono font-bold tabular-nums">{fit.score}/100</span>
+              </div>
+              <p className="mt-1 text-[10.5px] text-fg/80">{fit.formatLabel}</p>
+              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-line/70">
+                <div className="flame-gradient h-full rounded-full" style={{ width: `${fit.score}%` }} />
+              </div>
+              {fit.reasons[0] && <p className="mt-1.5 text-[9.5px] leading-relaxed text-mut">{fit.reasons[0]}</p>}
+            </div>
+          ))}
+          <p className="text-[9.5px] leading-relaxed text-mut/75">{th("formatComparisonHint")}</p>
+        </div>
+      )}
+
       {/* 质量门/复评备注 */}
       {(!c.recommended || (c.gateNotes?.length ?? 0) > 0) && (
         <p
@@ -345,6 +393,43 @@ function ParamsTab({ onRedetect }: { onRedetect: () => void }): React.JSX.Elemen
     <div className="flex flex-col gap-3.5">
       <p className="text-[10.5px] leading-relaxed text-mut/70">{t("paramsHint")}</p>
 
+      <div className="flex flex-col gap-1.5 rounded-xl border border-ember/25 bg-ember/[0.035] p-2.5">
+        <SectionLabel>{th("paramGame")}</SectionLabel>
+        <select
+          value={prefs.gameId}
+          onChange={(event) => {
+            const gameId = event.target.value;
+            setPref({ gameId, ...(gameId !== "auto" && prefs.genreId === "auto" ? { genreId: "game" } : {}) });
+            dirty();
+          }}
+          className="w-full rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 text-[12px] outline-none focus:border-ember/60"
+        >
+          <option value="auto">{th("gameAuto")}</option>
+          {GAME_PROFILES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+          <option value={CUSTOM_GAME_ID}>{th("gameCustom")}</option>
+        </select>
+        {prefs.gameId === CUSTOM_GAME_ID && (
+          <input
+            value={prefs.gameName}
+            maxLength={60}
+            placeholder={th("gameNamePlaceholder")}
+            onChange={(event) => { setPref({ gameName: event.target.value }); dirty(); }}
+            className="w-full rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 text-[11.5px] outline-none focus:border-ember/60"
+          />
+        )}
+        <SectionLabel>{th("paramTargetPlatform")}</SectionLabel>
+        <select
+          value={prefs.targetPlatform}
+          onChange={(event) => { setPref({ targetPlatform: event.target.value as typeof prefs.targetPlatform }); dirty(); }}
+          className="w-full rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 text-[12px] outline-none focus:border-ember/60"
+        >
+          <option value="compare">{th("platformCompare")}</option>
+          <option value="tiktok">TikTok</option>
+          <option value="instagram">Instagram Reels</option>
+        </select>
+        <p className="text-[10px] leading-relaxed text-mut/75">{th("platformScoringHint")}</p>
+      </div>
+
       <div className="flex flex-col gap-1.5">
         <SectionLabel>{t("paramGenre")}</SectionLabel>
         <select
@@ -382,20 +467,43 @@ function ParamsTab({ onRedetect }: { onRedetect: () => void }): React.JSX.Elemen
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-1.5">
         <SectionLabel>{t("paramLength")}</SectionLabel>
-        <Segmented<ClipLength>
+        <select
           value={prefs.clipLength}
-          options={[
-            { value: "short", label: t("lengthShortSeg"), title: th("lengthHint") },
-            { value: "standard", label: t("lengthStandardSeg") },
-            { value: "long", label: t("lengthLongSeg") },
-          ]}
-          onChange={(v) => {
-            setPref({ clipLength: v });
-            dirty();
-          }}
-        />
+          title={th("lengthHint")}
+          onChange={(event) => { setPref({ clipLength: event.target.value as ClipLength }); dirty(); }}
+          className="w-full rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 text-[12px] outline-none focus:border-ember/60"
+        >
+          <option value="auto">{th("lengthAuto")}</option>
+          <option value="short">{th("lengthShortOption")}</option>
+          <option value="standard">{th("lengthStandardOption")}</option>
+          <option value="long">{th("lengthLongOption")}</option>
+          <option value="custom">{th("lengthCustom")}</option>
+        </select>
+        {prefs.clipLength === "custom" && (
+          <label className="flex items-center gap-2 text-[11px] text-mut">
+            <span className="flex-1">{th("customDurationTarget")}</span>
+            <input
+              type="number"
+              min={5}
+              max={180}
+              step={1}
+              defaultValue={prefs.customDurationSec}
+              onBlur={(event) => {
+                const value = Math.max(5, Math.min(180, Math.round(Number(event.target.value) || 30)));
+                event.target.value = String(value);
+                setPref({ customDurationSec: value });
+                dirty();
+              }}
+              className="w-20 rounded-lg border border-line bg-panel-2 px-2 py-1.5 text-right font-mono text-[12px] outline-none focus:border-ember/60"
+            />
+            <span>s</span>
+          </label>
+        )}
+        <p className="text-[10px] leading-relaxed text-mut/70">
+          {th(prefs.clipLength === "auto" ? "lengthAutoHint" : prefs.clipLength === "custom" ? "lengthCustomHint" : "lengthPresetHint")}
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -504,14 +612,59 @@ function ParamsTab({ onRedetect }: { onRedetect: () => void }): React.JSX.Elemen
   );
 }
 
+function CameraWorkflowCard({
+  cameraAvailable,
+  onOpenCamera,
+}: {
+  cameraAvailable: boolean;
+  onOpenCamera: () => void;
+}): React.JSX.Element {
+  const th = useT("highlights");
+  const { prefs, setPref } = useRenderPrefs();
+  const active = prefs.vertical && prefs.cameraGameplay;
+  return (
+    <section className={`mx-3.5 mt-3 shrink-0 rounded-xl border p-2.5 ${active ? "border-ember/55 bg-ember/[0.07]" : "border-line/70 bg-panel-2/45"}`}>
+      <div className="flex items-center gap-2">
+        <LuCrop className={`h-4 w-4 shrink-0 ${active ? "text-ember" : "text-mut"}`} />
+        <h3 className="min-w-0 flex-1 text-[11.5px] font-extrabold">{th("cameraWorkflowTitle")}</h3>
+        <span className={`chip rounded-full px-2 py-0.5 text-[9px] ${active ? "text-emerald-400" : "text-mut"}`}>
+          {th(active ? "cameraWorkflowOn" : "cameraWorkflowOff")}
+        </span>
+      </div>
+      <p className="mt-1.5 text-[10px] leading-relaxed text-mut">{th("cameraWorkflowDesc")}</p>
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          type="button"
+          disabled={!cameraAvailable}
+          title={!cameraAvailable ? th("cameraLayoutNeedsVideo") : undefined}
+          onClick={onOpenCamera}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ember/45 bg-ember/5 px-2 py-1.5 text-[10.5px] font-bold text-ember transition-colors hover:bg-ember/10 disabled:opacity-40"
+        >
+          <LuCrop className="h-3 w-3" />
+          {th(active ? "cameraLayoutEdit" : "cameraWorkflowConfigure")}
+        </button>
+        {active && (
+          <button type="button" onClick={() => setPref({ cameraGameplay: false })} className="text-[10px] text-mut underline hover:text-fg">
+            {th("cameraWorkflowDisable")}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function Inspector({
   transcript,
   onRedetect,
   onOpenReview,
+  cameraAvailable,
+  onOpenCamera,
 }: {
   transcript: Transcript;
   onRedetect: () => void;
   onOpenReview: (id: number) => void;
+  cameraAvailable: boolean;
+  onOpenCamera: () => void;
 }): React.JSX.Element {
   const t = useT("workbench");
   const { candidates, focusedId, paramsDirty } = useSession();
@@ -542,6 +695,7 @@ export function Inspector({
           </button>
         ))}
       </div>
+      <CameraWorkflowCard cameraAvailable={cameraAvailable} onOpenCamera={onOpenCamera} />
       <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
         {tab === "params" ? (
           <ParamsTab onRedetect={onRedetect} />
