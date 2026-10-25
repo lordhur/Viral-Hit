@@ -640,7 +640,7 @@ export async function detectHighlights(
     const evidence: EvidenceClass = genrePreset(normalizeGenreId(genre?.id)).evidence;
     const ranked = dropOverlaps(applyGamingFormatSignal(detectLocalFree(transcript, {
       length, products, signals, evidence, brief,
-    }), brief, genre?.id)).sort((a, b) => b.score - a.score).slice(0, 8);
+    }), brief, genre?.id)).sort((a, b) => b.score - a.score).slice(0, brief?.maxClips ?? 8);
     const kept = dropOverlaps(ranked);
     return { candidates: applyRuleGate(transcript, normalizeScores(kept), false, "fr") };
   }
@@ -665,7 +665,7 @@ export async function detectHighlights(
   const selections = await chatCompleteJson(
     llm,
     highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory, genre, brief, performanceMemory),
-    buildHighlightPrompt(promptTranscript, 6, signals),
+    buildHighlightPrompt(promptTranscript, brief?.maxClips ?? 6, signals),
     parseSelections,
     signal
   );

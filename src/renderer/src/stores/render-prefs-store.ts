@@ -74,6 +74,8 @@ export interface RenderPrefs {
   /** 一片多版:总版本数(1=关,2/3=同一切片出几版差异化包装)。 */
   variants: number;
   clipLength: ClipLength;
+  /** 0 = automatic (up to six best clips); 1–12 = requested maximum. */
+  clipCount: number;
   /** Custom target in seconds; automatic mode leaves the choice to content/format fit. */
   customDurationSec: number;
   /** Game-specific editorial formats and TikTok/Instagram ranking target. */
@@ -141,6 +143,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   packPlatforms: ["douyin", "xiaohongshu", "channels"], // 中文矩阵最常见的三件套
   variants: 1, // 多版=多倍导出时间+一次 LLM 调用,默认关
   clipLength: "standard",
+  clipCount: 0,
   customDurationSec: 30,
   gameId: "auto",
   gameName: "",
@@ -189,6 +192,9 @@ function load(): RenderPrefs {
       }
       if (![1, 2, 3].includes(out.variants)) out.variants = 1;
       if (!["auto", "short", "standard", "long", "custom"].includes(out.clipLength)) out.clipLength = "standard";
+      out.clipCount = Number.isFinite(out.clipCount)
+        ? Math.round(out.clipCount) === 0 ? 0 : Math.max(1, Math.min(12, Math.round(out.clipCount)))
+        : 0;
       out.customDurationSec = Number.isFinite(out.customDurationSec) ? Math.max(5, Math.min(180, Math.round(out.customDurationSec))) : 30;
       if (!["auto", CUSTOM_GAME_ID, ...GAME_PROFILES.map((profile) => profile.id)].includes(out.gameId)) out.gameId = "auto";
       if (!["compare", "tiktok", "instagram"].includes(out.targetPlatform)) out.targetPlatform = "compare";

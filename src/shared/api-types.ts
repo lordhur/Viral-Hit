@@ -197,6 +197,8 @@ export interface DetectBrief {
   targetPlatform?: TargetPlatform;
   /** Seconds, used only when ClipLength is custom. */
   customDurationSec?: number;
+  /** Requested automatic clip count (1–12); omitted means automatic/default. */
+  maxClips?: number;
 }
 
 export interface PlatformFormatFit {

@@ -9,6 +9,7 @@ import { JobManager, type RecapJobInput } from "./jobs";
 import { assertInside, isPathInside, loadLocalEnv, serverDataDir, serverRoot } from "./config";
 import { localizeErrorMessage } from "../shared/french-errors";
 import { describeSubtitleImportError } from "../shared/subtitle-import";
+import { attachmentContentDisposition } from "../shared/content-disposition";
 import { ERR_TAG_MODEL_DOWNLOAD, ERR_TAG_MODEL_LOAD, ERR_TAG_NO_AUDIO } from "../shared/transcribe-errors";
 
 loadLocalEnv(serverRoot());
@@ -146,7 +147,7 @@ async function serveMedia(request: IncomingMessage, res: ServerResponse, url: UR
     "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff",
   };
   if (status === 206) headers["Content-Range"] = `bytes ${start}-${end}/${info.size}`;
-  if (url.searchParams.get("download") === "1") headers["Content-Disposition"] = `attachment; filename="${basename(path).replace(/["\r\n]/g, "_")}"`;
+  if (url.searchParams.get("download") === "1") headers["Content-Disposition"] = attachmentContentDisposition(basename(path));
   res.writeHead(status, headers);
   if (request.method === "HEAD") { res.end(); return; }
   const stream = createReadStream(path, { start, end });

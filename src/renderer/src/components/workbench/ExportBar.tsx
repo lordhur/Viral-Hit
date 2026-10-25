@@ -2,7 +2,7 @@
  * 底部出片栏:已选统计 + 变形度预估 + 方案切换 + 导出目录 + 出片按钮。
  * 33 个开关不再铺屏——常用的走方案一键切,全量选项在「全部选项」面板里。
  */
-import { LuFolderOpen, LuScissors, LuSlidersHorizontal } from "react-icons/lu";
+import { LuFolderOpen, LuScissors, LuSlidersHorizontal, LuSparkles } from "react-icons/lu";
 import { useT } from "../../i18n/store";
 import { getApi, isElectron } from "../../api/provider";
 import { useSession } from "../../stores/session-store";
@@ -11,14 +11,17 @@ import { useSchemes, BUILTIN_SCHEMES, matchesScheme } from "../../stores/scheme-
 import { useBrandStore, activeBrandStyle } from "../../stores/brand-store";
 import { transformScore } from "../../../../shared/transform-score";
 import { clipDurationSec } from "../../../../shared/pieces";
+import { selectAutomaticClips } from "../../../../shared/automatic-clips";
 
 export function ExportBar({
   defaultOutDir,
   onExport,
+  onSelectAutomatic,
   onOpenPanel,
 }: {
   defaultOutDir: string;
   onExport: () => void;
+  onSelectAutomatic: () => void;
   onOpenPanel: () => void;
 }): React.JSX.Element {
   const t = useT("workbench");
@@ -28,6 +31,7 @@ export function ExportBar({
   const brandState = useBrandStore();
   const { candidates, selected } = useSession();
   const picked = (candidates ?? []).filter((c) => selected.has(c.id));
+  const automaticCount = selectAutomaticClips(candidates ?? [], { maxClips: prefs.clipCount || 6 }).length;
   const totalSec = Math.round(picked.reduce((a, c) => a + clipDurationSec(c), 0));
 
   const schemes = [...BUILTIN_SCHEMES, ...userSchemes];
@@ -63,6 +67,16 @@ export function ExportBar({
       >
         {th("transformChip", { n: est.score })}
       </span>
+      <button
+        type="button"
+        disabled={automaticCount === 0}
+        onClick={onSelectAutomatic}
+        title={t("autoSelectHint")}
+        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-ember/35 px-2.5 py-1.5 text-[11px] font-semibold text-ember transition-colors hover:bg-ember/10 disabled:opacity-35"
+      >
+        <LuSparkles className="h-3.5 w-3.5" />
+        {t("autoSelect", { n: automaticCount })}
+      </button>
       {picked.length > 5 && <span className="hidden shrink-0 text-[10.5px] text-amber-400/90 lg:block">{th("overCapHint", { n: picked.length })}</span>}
       <span className="min-w-0 flex-1" />
       {/* 方案切换:选中即应用整组开关 */}
@@ -106,11 +120,12 @@ export function ExportBar({
       <button
         type="button"
         disabled={picked.length === 0}
+        title={picked.length === 0 ? t("exportEmptyHint") : undefined}
         onClick={onExport}
         className="btn-flame flex h-8.5 shrink-0 items-center gap-1.5 rounded-lg px-5 text-[13px] font-extrabold whitespace-nowrap text-white disabled:opacity-40"
       >
         <LuScissors className="h-4 w-4" />
-        {t("startExport", { n: picked.length })}
+        {picked.length === 1 ? t("startExportOne") : t("startExport", { n: picked.length })}
       </button>
     </div>
   );

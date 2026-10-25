@@ -23,19 +23,19 @@ it("complète les anciennes préférences sans écraser les choix existants", as
   const { store } = await loadPrefs({ clipLength: "long", vertical: false, genreId: "esports" });
   expect(store.getState().prefs).toMatchObject({
     clipLength: "long", vertical: false, genreId: "esports",
-    gameId: "auto", targetPlatform: "compare", customDurationSec: 30,
+    gameId: "auto", targetPlatform: "compare", customDurationSec: 30, clipCount: 0,
   });
 });
 
 it("valide et conserve les nouveaux réglages jeu, plateforme, durée et caméra", async () => {
   const { store, values } = await loadPrefs({
-    clipLength: "custom", customDurationSec: 999, gameId: "unknown", targetPlatform: "other",
+    clipLength: "custom", customDurationSec: 999, clipCount: 99, gameId: "unknown", targetPlatform: "other",
   });
   expect(store.getState().prefs).toMatchObject({
-    clipLength: "custom", customDurationSec: 180, gameId: "auto", targetPlatform: "compare",
+    clipLength: "custom", customDurationSec: 180, clipCount: 12, gameId: "auto", targetPlatform: "compare",
   });
-  store.getState().setPref({ gameId: "valorant", targetPlatform: "tiktok", customDurationSec: 24, cameraGameplay: true, vertical: true });
-  expect(store.getState().prefs).toMatchObject({ gameId: "valorant", targetPlatform: "tiktok", customDurationSec: 24, cameraGameplay: true });
+  store.getState().setPref({ gameId: "valorant", targetPlatform: "tiktok", customDurationSec: 24, clipCount: 4, cameraGameplay: true, vertical: true });
+  expect(store.getState().prefs).toMatchObject({ gameId: "valorant", targetPlatform: "tiktok", customDurationSec: 24, clipCount: 4, cameraGameplay: true });
   expect(values.get("hotclip-render-prefs")).toContain("valorant");
   expect(values.get("hotclip-render-prefs")).toContain("cameraGameplay");
 });

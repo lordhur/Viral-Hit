@@ -107,7 +107,16 @@ export const httpApi: HotClipApi = {
   exportClips: (filePath, clips, options) => rpc("exportClips", filePath, clips, options),
   onExportProgress: (cb) => subscribe("export", cb),
   cancelExport: () => command("cancelExport"),
-  revealClip: (path) => { window.open(`${mediaUrl(path, "download")}&download=1`, "_blank", "noopener,noreferrer"); },
+  revealClip: (path) => {
+    // A same-origin anchor honors Content-Disposition without popup blockers.
+    const link = document.createElement("a");
+    link.href = mediaDownloadUrl(path);
+    link.download = "";
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
   mediaUrl: (filePath, view = "main") => mediaUrl(filePath, view),
   selectImage: () => pickAndUpload("image/png,image/jpeg,image/webp", "asset"),
   selectAudio: () => pickAndUpload("audio/*", "asset"),
@@ -152,6 +161,10 @@ export const httpApi: HotClipApi = {
   glossarySet: (entries) => rpc("glossarySet", entries),
 };
 
-function mediaUrl(filePath: string, view: string): string {
+export function mediaUrl(filePath: string, view: string): string {
   return `/api/media/view/${encodeURIComponent(view)}/${encodeURIComponent(filePath)}`;
+}
+
+export function mediaDownloadUrl(filePath: string): string {
+  return `${mediaUrl(filePath, "download")}?download=1`;
 }

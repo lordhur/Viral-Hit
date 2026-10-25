@@ -249,29 +249,6 @@ function DetailTab({
         </div>
       )}
 
-      {c.formatComparison && (
-        <div className="flex flex-col gap-2 rounded-xl border border-ember/25 bg-ember/[0.035] p-2.5">
-          <SectionLabel>{th("formatComparisonTitle")}</SectionLabel>
-          <p className="text-[10.5px] font-semibold text-fg/85">{c.formatComparison.gameLabel}</p>
-          {[c.formatComparison.tiktok, c.formatComparison.instagram].map((fit) => (
-            <div key={fit.platform} className="rounded-lg border border-line/70 bg-panel-2/60 p-2">
-              <div className="flex items-center gap-2 text-[10.5px]">
-                <span className="font-bold">{fit.platform === "tiktok" ? "TikTok" : "Instagram Reels"}</span>
-                {c.formatComparison?.targetPlatform === fit.platform && <span className="chip rounded px-1.5 py-0.5 text-[9px] text-ember">{th("formatTarget")}</span>}
-                <span className="flex-1" />
-                <span className="font-mono font-bold tabular-nums">{fit.score}/100</span>
-              </div>
-              <p className="mt-1 text-[10.5px] text-fg/80">{fit.formatLabel}</p>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-line/70">
-                <div className="flame-gradient h-full rounded-full" style={{ width: `${fit.score}%` }} />
-              </div>
-              {fit.reasons[0] && <p className="mt-1.5 text-[9.5px] leading-relaxed text-mut">{fit.reasons[0]}</p>}
-            </div>
-          ))}
-          <p className="text-[9.5px] leading-relaxed text-mut/75">{th("formatComparisonHint")}</p>
-        </div>
-      )}
-
       {/* 质量门/复评备注 */}
       {(!c.recommended || (c.gateNotes?.length ?? 0) > 0) && (
         <p
@@ -368,7 +345,7 @@ function DetailTab({
 }
 
 /** 检测参数页签:改动标脏,「重新检测」显式生效。 */
-function ParamsTab({ onRedetect }: { onRedetect: () => void }): React.JSX.Element {
+function ParamsTab({ onRedetect, onSelectAutomatic }: { onRedetect: () => void; onSelectAutomatic: (count: number) => void }): React.JSX.Element {
   const t = useT("workbench");
   const th = useT("highlights");
   const lang = useLocaleStore((s) => s.locale);
@@ -465,6 +442,25 @@ function ParamsTab({ onRedetect }: { onRedetect: () => void }): React.JSX.Elemen
             className="w-full rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 text-[11.5px] outline-none focus:border-ember/60"
           />
         )}
+      </div>
+
+      <div className="flex flex-col gap-1.5 rounded-xl border border-line/70 bg-panel-2/35 p-2.5">
+        <SectionLabel>{t("paramClipCount")}</SectionLabel>
+        <select
+          value={prefs.clipCount}
+          onChange={(event) => {
+            const clipCount = Number(event.target.value);
+            setPref({ clipCount });
+            onSelectAutomatic(clipCount);
+          }}
+          className="w-full rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 text-[12px] outline-none focus:border-ember/60"
+        >
+          <option value={0}>{th("clipCountAuto")}</option>
+          {Array.from({ length: 12 }, (_, index) => index + 1).map((count) => (
+            <option key={count} value={count}>{count}</option>
+          ))}
+        </select>
+        <p className="text-[10px] leading-relaxed text-mut/75">{th("clipCountHint")}</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -657,12 +653,14 @@ export function Inspector({
   transcript,
   onRedetect,
   onOpenReview,
+  onSelectAutomatic,
   cameraAvailable,
   onOpenCamera,
 }: {
   transcript: Transcript;
   onRedetect: () => void;
   onOpenReview: (id: number) => void;
+  onSelectAutomatic: (count: number) => void;
   cameraAvailable: boolean;
   onOpenCamera: () => void;
 }): React.JSX.Element {
@@ -698,7 +696,7 @@ export function Inspector({
       <CameraWorkflowCard cameraAvailable={cameraAvailable} onOpenCamera={onOpenCamera} />
       <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
         {tab === "params" ? (
-          <ParamsTab onRedetect={onRedetect} />
+          <ParamsTab onRedetect={onRedetect} onSelectAutomatic={onSelectAutomatic} />
         ) : focused ? (
           <DetailTab c={focused} transcript={transcript} rank={rank} total={scored.length} onOpenReview={onOpenReview} />
         ) : (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adaptCropToCameraHeight,
+  cameraCropPercentStyle,
   DEFAULT_CAMERA_HEIGHT_FRAC,
   defaultCameraGameplayLayout,
   moveCropRect,
@@ -20,6 +21,12 @@ describe("cadrage caméra normalisé", () => {
     expect(result?.cameraCrop.y).toBe(0);
     expect(result?.cameraCrop.w).toBe(0.4);
     expect(normalizeCameraGameplayLayout({ cameraCrop: { x: "non" } })).toBeNull();
+  });
+
+  it("utilise exactement le même cadre CSS dans l’éditeur et l’aperçu vertical", () => {
+    expect(cameraCropPercentStyle({ x: 0.1, y: 0.2, w: 0.4, h: 0.5 })).toEqual({
+      left: "-25%", top: "-40%", width: "250%", height: "200%",
+    });
   });
 
   it("déplace sans sortir de la source", () => {

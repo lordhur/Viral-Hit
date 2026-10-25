@@ -79,6 +79,17 @@ export function moveCropRect(crop: CropRect, dx: number, dy: number): CropRect {
   return sanitizeCropRect({ ...crop, x: crop.x + dx, y: crop.y + dy });
 }
 
+/** CSS percentages shared by the editor and the live 9:16 preview. */
+export function cameraCropPercentStyle(value: CropRect): { left: string; top: string; width: string; height: string } {
+  const crop = sanitizeCropRect(value);
+  return {
+    left: `${(-crop.x / crop.w) * 100}%`,
+    top: `${(-crop.y / crop.h) * 100}%`,
+    width: `${100 / crop.w}%`,
+    height: `${100 / crop.h}%`,
+  };
+}
+
 /**
  * Ratio du cadre normalisé nécessaire pour que, une fois les dimensions de la
  * source appliquées, la caméra ait exactement les proportions de sa zone 9:16.

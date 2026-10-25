@@ -7,6 +7,7 @@ import { useRenderPrefs } from "../stores/render-prefs-store";
 import { ModalShell } from "./ui";
 import {
   adaptCropToCameraHeight,
+  cameraCropPercentStyle,
   DEFAULT_CAMERA_HEIGHT_FRAC,
   defaultCameraGameplayLayout,
   MAX_CAMERA_HEIGHT_FRAC,
@@ -113,13 +114,6 @@ export function CameraLayoutModal({
       cameraHeightFrac,
     });
     onClose();
-  };
-
-  const cameraVideoStyle: React.CSSProperties = {
-    left: `${(-crop.x / crop.w) * 100}%`,
-    top: `${(-crop.y / crop.h) * 100}%`,
-    width: `${100 / crop.w}%`,
-    height: `${100 / crop.h}%`,
   };
 
   return (
@@ -230,7 +224,7 @@ export function CameraLayoutModal({
                   ref={cameraRef}
                   src={getApi().mediaUrl(filePath, "camera-preview")}
                   className="absolute max-w-none"
-                  style={cameraVideoStyle}
+                  style={cameraCropPercentStyle(crop)}
                   muted
                   playsInline
                   preload="auto"

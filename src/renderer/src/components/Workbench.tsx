@@ -220,7 +220,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
   const autoExported = useRef(false);
   useEffect(() => {
     if (!auto || autoExported.current || !candidates) return;
-    const publishable = selectAutomaticClips(candidates, { maxClips: 6 });
+    const publishable = selectAutomaticClips(candidates, { maxClips: prefs.clipCount || 6 });
     if (publishable.length === 0) return;
     autoExported.current = true;
     session.setExporting({
@@ -319,15 +319,26 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
     return () => window.removeEventListener("keydown", onKey);
   }, [durationSec, exporting, stepCandidate]);
 
-  const startExport = useCallback((): void => {
+  const applyAutomaticSelection = useCallback((count = prefs.clipCount): void => {
+    const state = useSession.getState();
+    const picked = selectAutomaticClips(state.candidates ?? [], { maxClips: count || 6 });
+    state.setSelected(new Set(picked.map((candidate) => candidate.id)));
+    if (picked[0]) {
+      state.setFocusedId(picked[0].id);
+      seek(picked[0].startSec);
+    }
+  }, [prefs.clipCount, seek]);
+
+  const startExport = useCallback((onlyId?: number): void => {
     const s = useSession.getState();
-    const picked = (s.candidates ?? []).filter((c) => s.selected.has(c.id));
+    const picked = (s.candidates ?? []).filter((candidate) => onlyId === undefined ? s.selected.has(candidate.id) : candidate.id === onlyId);
     if (picked.length === 0 || !s.transcript) return;
     // 审阅反馈回流:本场的采用/否决落本地偏好档(尽力而为,失败不挡导出)
     const summarize = (list: HighlightCandidate[]): ReviewedCandidate[] =>
       list.map((c) => ({ title: c.title, hook: c.hook, score: c.score, durationSec: Math.round(clipDurationSec(c)), keywords: c.keywords.slice(0, 5) }));
+    const exportedIds = new Set(picked.map((candidate) => candidate.id));
     void getApi()
-      .recordReview(s.file?.path ?? "", summarize(picked), summarize((s.candidates ?? []).filter((c) => !s.selected.has(c.id))))
+      .recordReview(s.file?.path ?? "", summarize(picked), summarize((s.candidates ?? []).filter((candidate) => !exportedIds.has(candidate.id))))
       .catch(() => {});
     s.setExporting({
       clips: picked,
@@ -373,6 +384,8 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                 onNextCandidate={() => stepCandidate(1)}
                 compact={tab === "transcript"}
                 transportCommand={transportCommand}
+                clip={candidates?.find((candidate) => candidate.id === focusedId) ?? null}
+                cameraAvailable={file.hasVideo}
               />
               {(tab !== "transcript" || showTranscriptTimeline) && <Timeline
                 filePath={file.path}
@@ -494,6 +507,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                   focusedId={focusedId}
                   onFocus={focusCandidate}
                   onToggle={(id) => session.toggleSelected(id)}
+                  onExport={(id) => startExport(id)}
                 />
               ) : candidates ? (
                 <p className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-line/60 bg-panel/60 p-6 text-center text-[12px] text-mut">
@@ -511,6 +525,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
             transcript={transcript}
             onRedetect={() => void run()}
             onOpenReview={setReviewId}
+            onSelectAutomatic={applyAutomaticSelection}
             cameraAvailable={file.hasVideo}
             onOpenCamera={() => { setCameraReturnToExport(false); setShowCameraLayout(true); }}
           />
@@ -518,7 +533,12 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
       </div>
 
       {transcript && candidates && candidates.length > 0 && (
-        <ExportBar defaultOutDir={defaultOutDir} onExport={startExport} onOpenPanel={() => setShowExportPanel(true)} />
+        <ExportBar
+          defaultOutDir={defaultOutDir}
+          onExport={() => startExport()}
+          onSelectAutomatic={() => applyAutomaticSelection()}
+          onOpenPanel={() => setShowExportPanel(true)}
+        />
       )}
 
       {/* ---- 导出进行中:中央覆盖层(候选保留在 store,出完直接回来) ---- */}

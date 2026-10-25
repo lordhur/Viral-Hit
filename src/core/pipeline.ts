@@ -191,12 +191,12 @@ export async function detectForPipeline(
             : {}),
         }
       : guided;
+  const max = Math.max(1, Math.min(12, Math.round(cfg.maxClips ?? 6)));
   const outcome = await detectHighlights(
     transcript, cfg.llm, cfg.signal, merged,
     undefined, undefined, undefined, cfg.reference, cfg.reviewMemory,
-    undefined, undefined, cfg.performanceMemory
+    undefined, { maxClips: max }, cfg.performanceMemory
   );
-  const max = Math.max(1, Math.min(12, Math.round(cfg.maxClips ?? 6)));
   const ranked = [...outcome.candidates].sort((a, b) => b.score - a.score || a.startSec - b.startSec);
   // Les clips directement pubables passent avant la limite de nombre : un clip
   // à réviser ne doit pas évincer un meilleur clip automatique situé plus tard

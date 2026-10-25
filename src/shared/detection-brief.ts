@@ -23,5 +23,7 @@ export function sanitizeDetectBrief(value: unknown): DetectBrief | undefined {
   }
   const duration = Number(raw.customDurationSec);
   if (Number.isFinite(duration)) brief.customDurationSec = Math.max(5, Math.min(180, Math.round(duration)));
+  const maxClips = Number(raw.maxClips);
+  if (Number.isFinite(maxClips) && maxClips > 0) brief.maxClips = Math.max(1, Math.min(12, Math.round(maxClips)));
   return Object.values(brief).some((entry) => entry !== undefined) ? brief : undefined;
 }

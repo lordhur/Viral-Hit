@@ -9,6 +9,7 @@ import { useSession } from "../../stores/session-store";
 import { useLlmStore } from "../../stores/llm-store";
 import { useRenderPrefs } from "../../stores/render-prefs-store";
 import { errorText } from "../../i18n/errors";
+import { selectAutomaticClips } from "../../../../shared/automatic-clips";
 
 export function useDetection(): { run: () => Promise<void> } {
   const { config, prefilter, vision } = useLlmStore();
@@ -40,6 +41,7 @@ export function useDetection(): { run: () => Promise<void> } {
           gameName: prefs.gameName.trim() || undefined,
           targetPlatform: prefs.targetPlatform,
           customDurationSec: prefs.customDurationSec,
+          maxClips: prefs.clipCount > 0 ? prefs.clipCount : undefined,
         },
         prefs.fullScan && vision.enabled
       );
@@ -54,9 +56,10 @@ export function useDetection(): { run: () => Promise<void> } {
         reference: result.reference ?? null,
         referenceError: result.referenceError ?? null,
       });
-      // 复评通过的预选出片;右栏聚焦第一条推荐(没有就第一条)
-      st.setSelected(new Set(result.candidates.filter((c) => c.recommended).map((c) => c.id)));
-      st.setFocusedId(result.candidates.find((c) => c.recommended)?.id ?? result.candidates[0]?.id ?? null);
+      // Automatic count selects the best publishable clips, never review/drop.
+      const automatic = selectAutomaticClips(result.candidates, { maxClips: prefs.clipCount || 6 });
+      st.setSelected(new Set(automatic.map((candidate) => candidate.id)));
+      st.setFocusedId(automatic[0]?.id ?? result.candidates[0]?.id ?? null);
       // 带说话人标注的逐句稿回流(导出按说话人给字幕上色)
       if (result.transcript) st.setTranscript(result.transcript);
       st.markParamsDirty(false);

@@ -4,7 +4,7 @@
  * AI 判弃的折叠到列表末尾,展开才显示(可手动捞回)。
  */
 import { useState } from "react";
-import { LuCheck, LuChevronDown, LuScissorsLineDashed, LuBookmark, LuTextSelect, LuTriangleAlert, LuBan } from "react-icons/lu";
+import { LuCheck, LuChevronDown, LuScissorsLineDashed, LuBookmark, LuTextSelect, LuTriangleAlert, LuBan, LuDownload } from "react-icons/lu";
 import { useT } from "../../i18n/store";
 import { gateNoteText } from "../../i18n/errors";
 import { clipDurationSec, isStitched } from "../../../../shared/pieces";
@@ -42,12 +42,14 @@ export function CandidateTable({
   focusedId,
   onFocus,
   onToggle,
+  onExport,
 }: {
   candidates: HighlightCandidate[];
   selected: Set<number>;
   focusedId: number | null;
   onFocus: (id: number) => void;
   onToggle: (id: number) => void;
+  onExport: (id: number) => void;
 }): React.JSX.Element {
   const t = useT("workbench");
   const th = useT("highlights");
@@ -67,6 +69,7 @@ export function CandidateTable({
         <span className="w-9">{t("colDur")}</span>
         <span className="hidden w-[104px] xl:block">{t("colDims")}</span>
         <span className="w-[52px]">{t("colGate")}</span>
+        <span className="w-7" />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {rows.map((c) => {
@@ -131,6 +134,18 @@ export function CandidateTable({
                   <span className="text-[9.5px] font-bold text-emerald-400/90">{t("gatePublish")}</span>
                 )}
               </span>
+              <button
+                type="button"
+                title={t("exportThisClip")}
+                aria-label={`${t("exportThisClip")} — ${c.title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onExport(c.id);
+                }}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-ember/35 text-ember transition-colors hover:bg-ember/10"
+              >
+                <LuDownload className="h-3.5 w-3.5" />
+              </button>
             </div>
           );
         })}

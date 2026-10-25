@@ -78,9 +78,9 @@ describe("comparaison locale des formats gaming", () => {
       transcript,
       { provider: "builtin", baseUrl: "builtin", model: "builtin", apiKey: "" },
       undefined, undefined, undefined, "auto", [], undefined, undefined,
-      { id: "game" }, { gameId: "valorant", targetPlatform: "compare" },
+      { id: "game" }, { gameId: "valorant", targetPlatform: "compare", maxClips: 1 },
     );
-    expect(outcome.candidates.length).toBeGreaterThan(0);
+    expect(outcome.candidates).toHaveLength(1);
     expect(outcome.candidates.every((item) => item.formatComparison?.gameLabel === "Valorant")).toBe(true);
   });
 });
@@ -97,10 +97,11 @@ describe("durée et validation du brief", () => {
 
   it("nettoie le jeu, la plateforme, les textes et la durée à la frontière", () => {
     expect(sanitizeDetectBrief({
-      focus: "  clutch  ", gameId: "valorant", gameName: "  Custom  ", targetPlatform: "tiktok", customDurationSec: 31.4,
-    })).toEqual({ focus: "clutch", gameId: "valorant", gameName: "Custom", targetPlatform: "tiktok", customDurationSec: 31 });
-    expect(sanitizeDetectBrief({ gameId: "not-a-game", targetPlatform: "other", customDurationSec: -4 }))
+      focus: "  clutch  ", gameId: "valorant", gameName: "  Custom  ", targetPlatform: "tiktok", customDurationSec: 31.4, maxClips: 7.6,
+    })).toEqual({ focus: "clutch", gameId: "valorant", gameName: "Custom", targetPlatform: "tiktok", customDurationSec: 31, maxClips: 8 });
+    expect(sanitizeDetectBrief({ gameId: "not-a-game", targetPlatform: "other", customDurationSec: -4, maxClips: 0 }))
       .toEqual({ customDurationSec: 5 });
+    expect(sanitizeDetectBrief({ maxClips: 99 })).toEqual({ maxClips: 12 });
     expect(sanitizeDetectBrief(null)).toBeUndefined();
   });
 });

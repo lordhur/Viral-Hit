@@ -4,7 +4,7 @@
  * with reveal-in-folder actions.
  */
 import { useEffect, useRef, useState } from "react";
-import { LuScissors, LuCircleCheck, LuFolderOpen, LuArrowLeft, LuRotateCcw, LuFilm, LuCircleStop } from "react-icons/lu";
+import { LuScissors, LuCircleCheck, LuFolderOpen, LuArrowLeft, LuRotateCcw, LuFilm, LuCircleStop, LuDownload } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { exportProgressPercent } from "../../../shared/export-progress";
@@ -164,6 +164,7 @@ export function ExportView({
             <h1 className="mt-3 text-3xl font-extrabold tracking-tight">{t("doneTitle")}</h1>
             <p className="mt-2 text-[14px] text-mut">{t("doneDesc", { n: results.length })}</p>
             <p className="mx-auto mt-1.5 max-w-md text-[12px] text-mut/80">{t("doneMeta")}</p>
+            {!isElectron() && <p className="mx-auto mt-2 max-w-md text-[12px] font-semibold text-ember">{t("doneDownloadHint")}</p>}
           </div>
 
           <div className="card mt-7 rounded-2xl p-2">
@@ -213,16 +214,15 @@ export function ExportView({
                     {Math.round(clip.durationSec)}s · {formatSize(clip.sizeBytes)} · {clip.path}
                   </p>
                 </div>
-                {isElectron() && (
-                  <button
-                    type="button"
-                    onClick={() => getApi().revealClip(clip.path)}
-                    title={t("reveal")}
-                    className="shrink-0 rounded-lg border border-line p-2 text-mut transition-colors hover:border-mut hover:text-fg"
-                  >
-                    <LuFolderOpen className="h-4 w-4" />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => getApi().revealClip(clip.path)}
+                  title={isElectron() ? t("reveal") : t("download")}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ember/40 px-3 py-2 text-[11.5px] font-bold text-ember transition-colors hover:bg-ember/10"
+                >
+                  {isElectron() ? <LuFolderOpen className="h-4 w-4" /> : <LuDownload className="h-4 w-4" />}
+                  {isElectron() ? t("reveal") : t("download")}
+                </button>
               </div>
             ))}
           </div>
