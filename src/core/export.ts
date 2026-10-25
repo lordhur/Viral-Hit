@@ -68,6 +68,7 @@ import { mapSensitiveRanges } from "./sensitive-words";
 import { planRepair, applyRepair } from "./repair";
 import { applyBrandToLayout } from "./brand";
 import type { AlignmentQualityReport, SubtitleQualityReport, TranscriptWord, BrandStyle } from "../shared/api-types";
+import { normalizeCameraGameplayLayout, type CameraGameplayLayout } from "../shared/camera-layout";
 import type { WatermarkSpec } from "./cut";
 import { transformScore, type TransformInputs, type TransformScore } from "../shared/transform-score";
 import { buildLedgerCsv, type LedgerRow } from "./ledger";
@@ -221,7 +222,7 @@ export function transformInputsFromRender(
   opts: Pick<ExportRenderOptions, "titleCard" | "autoZoom" | "brand">
 ): TransformInputs {
   return {
-    vertical: render.reframe === "face-track" || render.reframe === "center-crop",
+    vertical: render.reframe === "face-track" || render.reframe === "center-crop" || render.reframe === "camera-gameplay",
     captions: render.captionsBurned,
     recut: (render.edit?.splices ?? 0) > 0 || render.fillersRemoved > 0 || render.retakesRemoved > 0,
     reopened: render.coldOpenSec !== null || render.flashForward,
@@ -241,8 +242,8 @@ export interface ClipRenderOutcome {
   captionStyle: string;
   /** False when a web-overlay pass failed and the clip shipped without word captions. */
   captionsBurned: boolean;
-  /** "face-track" when the crop followed a face, "center-crop" on fallback, "none" for horizontal, "audiogram" for audio-only sources. */
-  reframe: "face-track" | "center-crop" | "none" | "audiogram";
+  /** Effective picture layout; camera-gameplay records the manual two-zone vertical composition. */
+  reframe: "face-track" | "center-crop" | "camera-gameplay" | "none" | "audiogram";
   /** Per-shot comfort-composition receipt when face-aware reframing ran. */
   reframeComposition?: {
     totalShots: number;
@@ -312,6 +313,8 @@ export interface ClipRenderOutcome {
 export interface ExportRenderOptions {
   /** Center-crop reframe to 9:16 (1080×1920). */
   vertical?: boolean;
+  /** Manual camera rectangle above gameplay from the same horizontal source. */
+  cameraGameplay?: CameraGameplayLayout;
   /** Caption style to burn in (clips must carry `words`); omit for none. */
   captionStyle?: CaptionStyle | WebCaptionStyle;
   /** Injected web-overlay renderer (Electron main); required for web styles. */
@@ -538,6 +541,9 @@ export async function exportClips(
     };
     const colorInspectionFailed = srcInfo === null;
     const audioOnly = srcInfo ? !srcInfo.hasVideo : false;
+    const cameraGameplay = options.vertical && !audioOnly
+      ? normalizeCameraGameplayLayout(options.cameraGameplay)
+      : null;
     const color = srcInfo?.hasVideo ? planColorRender(srcInfo) : null;
     const hdrDetected = isHdrSource(color);
     const allowSdrVisualEnhance = !hdrDetected && !colorInspectionFailed;
@@ -588,7 +594,7 @@ export async function exportClips(
 
     // one UI-chrome detection pass for the whole source (bands don't move)
     let uiCrop: UiCrop | undefined;
-    if (options.trimUi && clips.length > 0 && !audioOnly) {
+    if (options.trimUi && clips.length > 0 && !audioOnly && !cameraGameplay) {
       const spanEnd = Math.max(...clips.map((c) => c.endSec));
       uiCrop = await detectUiCrop(inputPath, spanEnd, srcInfo?.videoStreamIndex, color, signal).catch(() => {
         signal?.throwIfAborted();
@@ -864,7 +870,7 @@ export async function exportClips(
       let trackPlan;
       let reframeComposition: ClipRenderOutcome["reframeComposition"];
       let reframeCoverage: ClipQaReport["subjectCoverage"];
-      if (options.vertical && options.faceTrack && options.modelsRoot && !audioOnly) {
+      if (options.vertical && options.faceTrack && options.modelsRoot && !audioOnly && !cameraGameplay) {
         // 拼接片逐段各算一版:整段跨度可能有几十分钟,人脸检测按跨度跑纯属白烧。
         // 每段的关键帧相对本段起点,统一平移到「相对切片起点」再走同一条重映射。
         const cp = stitched
@@ -937,7 +943,7 @@ export async function exportClips(
       // 强调时刻 = 最响的几个峰值事件——「推近必须绑定真实事件」,纯呼吸
       // 之外镜头语言要和内容对上(autozoom.ts 本就支持,这里把信号接通)
       const autoZoom =
-        options.autoZoom && options.vertical && !audioOnly && srcInfo && srcInfo.fps > 0
+        options.autoZoom && options.vertical && !audioOnly && !cameraGameplay && srcInfo && srcInfo.fps > 0
           ? {
               durationSec: clipDuration,
               fps: srcInfo.fps,
@@ -960,6 +966,7 @@ export async function exportClips(
             ...sourceStreams,
             uiCrop,
             vertical: options.vertical,
+            cameraGameplay: cameraGameplay ?? undefined,
             autoZoom,
             visualEnhance,
             color: activeColor,
@@ -984,6 +991,8 @@ export async function exportClips(
               uiCrop,
               ...sourceStreams,
               vertical: options.vertical,
+              // undefined est omis de la clé canonique : les caches existants restent réutilisables.
+              cameraGameplay: cameraGameplay ?? undefined,
               autoZoom,
               visualEnhance,
               color: activeColor,
@@ -1195,7 +1204,7 @@ export async function exportClips(
               : null;
             const miniCutOptions = miniTrack
               ? { ...sourceStreams, trackPlan: miniTrack, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: baseNormalizeLoudness, denoise: baseDenoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder }
-              : { ...sourceStreams, uiCrop, vertical: options.vertical, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: baseNormalizeLoudness, denoise: baseDenoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
+              : { ...sourceStreams, uiCrop, vertical: options.vertical, cameraGameplay: cameraGameplay ?? undefined, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: baseNormalizeLoudness, denoise: baseDenoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
             await rename(outPath, bodyPath);
             await cutClip(inputPath, miniPath, coPlan.startSec, coPlan.endSec, miniCutOptions, signal);
             // 硬切拼接(通行做法);AIGC 隐式标识补到最终容器上
@@ -1482,7 +1491,7 @@ export async function exportClips(
       renderByClip.set(clip.id, {
         captionStyle: wantCaptions ? (webStyle ?? assStyle) : "none",
         captionsBurned: wantCaptions && !webRenderFailed,
-        reframe: audioOnly ? "audiogram" : options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
+        reframe: audioOnly ? "audiogram" : cameraGameplay ? "camera-gameplay" : options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
         reframeComposition,
         edit: summarizeEdit(origDur, plan),
         fillersRemoved: fillerHits.length,
@@ -1819,7 +1828,7 @@ export async function exportClips(
         // 标题贴片/悬念句大字是竖屏短视频形态,横屏版去掉(标题交给平台标题字段);
         // 字幕沿用横屏布局(底部小号),封面/回执/SRT 在子目录各自成套
         // publishPack 只在主目录打一次(横屏版在包 manifest 的备注里指路)
-        { ...options, vertical: false, alsoLandscape: false, faceTrack: false, compilation: false, timeline: false, titleCard: false, openingHook: false, publishPack: undefined, seriesPack: false },
+        { ...options, vertical: false, cameraGameplay: undefined, alsoLandscape: false, faceTrack: false, compilation: false, timeline: false, titleCard: false, openingHook: false, publishPack: undefined, seriesPack: false },
         onProgress
           ? (p) => onProgress({ ...p, current: p.current + clips.length, total: totalUnits })
           : undefined,

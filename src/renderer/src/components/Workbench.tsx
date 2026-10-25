@@ -24,10 +24,12 @@ import { ExportPanel } from "./workbench/ExportPanel";
 import { TranscribeView } from "./TranscribeView";
 import { ExportView } from "./ExportView";
 import { ClipReviewModal } from "./ClipReviewModal";
+import { CameraLayoutModal } from "./CameraLayoutModal";
 import { TranscriptPickModal } from "./TranscriptPickModal";
 import { BrandStyleModal } from "./BrandStyleModal";
 import { WatchFolderModal } from "./WatchFolderModal";
 import { clipDurationSec } from "../../../shared/pieces";
+import { selectAutomaticClips } from "../../../shared/automatic-clips";
 import { resolveWorkbenchShortcut } from "../keyboard-shortcuts";
 import type { ClipPiece, HighlightCandidate, ReviewedCandidate, SessionEditCommand } from "../../../shared/api-types";
 
@@ -183,6 +185,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
   const [showBrand, setShowBrand] = useState(false);
   const [showWatch, setShowWatch] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
+  const [showCameraLayout, setShowCameraLayout] = useState(false);
   const [defaultOutDir, setDefaultOutDir] = useState("");
   const [showTranscriptTimeline, setShowTranscriptTimeline] = useState(false);
   const [transportCommand, setTransportCommand] = useState<PreviewTransportCommand | null>(null);
@@ -216,7 +219,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
   const autoExported = useRef(false);
   useEffect(() => {
     if (!auto || autoExported.current || !candidates) return;
-    const publishable = candidates.filter((c) => c.recommended && (c.gate === undefined || c.gate === "publish"));
+    const publishable = selectAutomaticClips(candidates, { maxClips: 6 });
     if (publishable.length === 0) return;
     autoExported.current = true;
     session.setExporting({
@@ -528,7 +531,27 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
 
       {/* ---- 弹窗 ---- */}
       {showExportPanel && (
-        <ExportPanel diarize={session.diarize} atlasReady={atlasReady} onClose={() => setShowExportPanel(false)} onOpenBrand={() => setShowBrand(true)} />
+        <ExportPanel
+          diarize={session.diarize}
+          atlasReady={atlasReady}
+          cameraAvailable={file.hasVideo}
+          onClose={() => setShowExportPanel(false)}
+          onOpenBrand={() => setShowBrand(true)}
+          onOpenCamera={() => {
+            setShowExportPanel(false);
+            setShowCameraLayout(true);
+          }}
+        />
+      )}
+      {showCameraLayout && (
+        <CameraLayoutModal
+          filePath={file.path}
+          durationSec={durationSec}
+          onClose={() => {
+            setShowCameraLayout(false);
+            setShowExportPanel(true);
+          }}
+        />
       )}
       {showBrand && <BrandStyleModal onClose={() => setShowBrand(false)} />}
       {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}

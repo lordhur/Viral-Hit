@@ -6,12 +6,20 @@
 import { create } from "zustand";
 import type { CaptionStyleChoice, ClipLength, ExportQuality } from "../../../shared/api-types";
 import { validPlatformIds } from "../../../shared/platform-specs";
+import {
+  defaultCameraGameplayLayout,
+  normalizeCameraGameplayLayout,
+  type CropRect,
+} from "../../../shared/camera-layout";
 import { DEFAULT_SENSITIVE_WORDS, sanitizeSensitiveWords } from "../../../core/sensitive-words";
 
 const STORAGE_KEY = "hotclip-render-prefs";
 
 export interface RenderPrefs {
   vertical: boolean;
+  cameraGameplay: boolean;
+  cameraCrop: CropRect;
+  cameraHeightFrac: number;
   captionStyle: CaptionStyleChoice;
   jumpCut: boolean;
   /** 保留呼吸口:跳剪剪长停顿时每个剪口多留一口气,不无缝贴死。 */
@@ -86,6 +94,9 @@ export interface RenderPrefs {
 /** 与出厂默认一致:开箱即出竖屏卡拉OK跳剪片;花钱/额外文件的默认关。 */
 export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   vertical: true,
+  cameraGameplay: false,
+  cameraCrop: { ...defaultCameraGameplayLayout().cameraCrop },
+  cameraHeightFrac: defaultCameraGameplayLayout().cameraHeightFrac,
   captionStyle: "keyword",
   jumpCut: true,
   keepBreath: false, // 呼吸口改变跳剪节奏,默认保持历史紧凑感,由用户按素材开
@@ -171,6 +182,12 @@ function load(): RenderPrefs {
       if (!["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"].includes(out.captionStyle)) out.captionStyle = "keyword";
       if (!["off", "volume", "premium"].includes(out.aiCover)) out.aiCover = "off";
       if (!["basic", "smart"].includes(out.denoiseMode)) out.denoiseMode = "basic";
+      const camera = normalizeCameraGameplayLayout({
+        cameraCrop: out.cameraCrop,
+        cameraHeightFrac: out.cameraHeightFrac,
+      }) ?? defaultCameraGameplayLayout();
+      out.cameraCrop = camera.cameraCrop;
+      out.cameraHeightFrac = camera.cameraHeightFrac;
       return out;
     }
   } catch {

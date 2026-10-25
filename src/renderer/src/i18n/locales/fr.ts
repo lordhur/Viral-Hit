@@ -137,7 +137,7 @@ const frBase = {
     featAiDesc: "Citations, tensions et pics d’émotion",
     startTranscribe: "Étape par étape",
     autoRun: "Créer les shorts automatiquement",
-    autoRunHint: "Transcription → moments forts → vertical + sous-titres + suppression des silences",
+    autoRunHint: "Transcription → meilleurs scores de viralité → jusqu’à 6 clips verticaux avec sous-titres et suppression des silences",
   },
   transcribe: {
     ...en.transcribe,

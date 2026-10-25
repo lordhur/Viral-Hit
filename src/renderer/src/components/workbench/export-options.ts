@@ -24,6 +24,9 @@ export function buildRenderToggles(opts: {
   const targetLang = (transcript?.language || "").startsWith("zh") ? "en" : "zh";
   return {
     vertical: prefs.vertical,
+    cameraGameplay: prefs.cameraGameplay && prefs.vertical
+      ? { cameraCrop: { ...prefs.cameraCrop }, cameraHeightFrac: prefs.cameraHeightFrac }
+      : undefined,
     captionStyle: prefs.captionStyle,
     jumpCut: prefs.jumpCut,
     keepBreath: prefs.keepBreath,

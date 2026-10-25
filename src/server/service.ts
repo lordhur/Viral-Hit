@@ -298,7 +298,7 @@ export class LocalService {
       }));
       const specs = variantPlans ? expandClipSpecs(baseSpecs, variantPlans, Boolean(opts.publishCopy?.llm?.baseUrl && opts.publishCopy.llm.model), !opts.flashForward) : baseSpecs;
       const render: ExportRenderOptions = {
-        vertical: Boolean(opts.vertical), captionStyle: style,
+        vertical: Boolean(opts.vertical), cameraGameplay: opts.cameraGameplay, captionStyle: style,
         jumpCut: Boolean(opts.jumpCut && transcript), keepBreath: Boolean(opts.keepBreath), speakerLabels: opts.speakerLabels !== false,
         templateJitter: Boolean(opts.templateJitter), cleanFillers: Boolean(opts.cleanFillers && transcript), cutRetakes: Boolean(opts.cutRetakes && transcript),
         autoZoom: Boolean(opts.autoZoom), autoEnhance: Boolean(opts.autoEnhance), sfx: Boolean(opts.sfx),

@@ -29,6 +29,7 @@ import { wordsInPieces } from "../shared/pieces";
 import { probeMedia } from "./probe";
 import { planColorRender } from "./color";
 import type { AnalysisVideoOptions } from "./analysis-video";
+import { selectAutomaticClips } from "../shared/automatic-clips";
 
 export interface AutoClipConfig {
   modelsRoot: string;
@@ -195,7 +196,13 @@ export async function detectForPipeline(
     undefined, undefined, cfg.performanceMemory
   );
   const max = Math.max(1, Math.min(12, Math.round(cfg.maxClips ?? 6)));
-  return outcome.candidates.slice(0, max);
+  const ranked = [...outcome.candidates].sort((a, b) => b.score - a.score || a.startSec - b.startSec);
+  // Les clips directement pubables passent avant la limite de nombre : un clip
+  // à réviser ne doit pas évincer un meilleur clip automatique situé plus tard
+  // dans la chronologie. Les autres restent visibles pour highlights/MCP.
+  const automatic = selectAutomaticClips(ranked, { maxClips: max });
+  const automaticIds = new Set(automatic.map((candidate) => candidate.id));
+  return [...automatic, ...ranked.filter((candidate) => !automaticIds.has(candidate.id))].slice(0, max);
 }
 
 /** 全托管一条龙:转写 → 找爆点 → 导出推荐条(竖屏/字幕/跳剪/响度默认全开)。 */
@@ -209,7 +216,7 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
   cfg.signal?.throwIfAborted();
   // 无人值守只发「建议发」档:质量门判需人审/弃的没有人看过,不能自动发出去
   // (gate 缺省 = 信号候选/复评没跑,沿用 recommended 的老语义)
-  const publishable = candidates.filter((c) => c.recommended && (c.gate === undefined || c.gate === "publish"));
+  const publishable = selectAutomaticClips(candidates, { maxClips: cfg.maxClips });
   const outDir =
     cfg.outDir ?? join(dirname(videoPath), `${sanitizeFilename(basename(videoPath, extname(videoPath)), "video")}-viral-hit`);
   if (publishable.length === 0) return { outDir, transcript, candidates, exported: [] };

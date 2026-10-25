@@ -3,7 +3,7 @@
  * 弹窗」不再伪装成开关;当前组合可存成命名方案,一键复用。
  */
 import { useState } from "react";
-import { LuX, LuPalette, LuTrash2, LuLoaderCircle } from "react-icons/lu";
+import { LuX, LuPalette, LuTrash2, LuLoaderCircle, LuCrop } from "react-icons/lu";
 import { useT, useLocaleStore } from "../../i18n/store";
 import { getApi } from "../../api/provider";
 import { useRenderPrefs } from "../../stores/render-prefs-store";
@@ -44,11 +44,15 @@ export function ExportPanel({
   atlasReady,
   onClose,
   onOpenBrand,
+  onOpenCamera,
+  cameraAvailable,
 }: {
   diarize: boolean;
   atlasReady: boolean;
   onClose: () => void;
   onOpenBrand: () => void;
+  onOpenCamera: () => void;
+  cameraAvailable: boolean;
 }): React.JSX.Element {
   const t = useT("workbench");
   const th = useT("highlights");
@@ -69,6 +73,7 @@ export function ExportPanel({
     if (p) setPref({ bgmPath: p });
   };
   const bgmName = prefs.bgmPath ? (prefs.bgmPath.split(/[\\/]/).pop() ?? "") : "";
+  const cameraMode = prefs.cameraGameplay && prefs.vertical;
 
   return (
     <ModalShell onClose={onClose}>
@@ -134,7 +139,33 @@ export function ExportPanel({
 
         <div className="mt-3.5 grid min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
           <Group title={t("groupPicture")}>
-            <SwitchRow label={th("optVertical")} hint={th("optVerticalHint")} on={prefs.vertical} onToggle={() => setPref({ vertical: !prefs.vertical })} />
+            <SwitchRow
+              label={th("optVertical")}
+              hint={th("optVerticalHint")}
+              on={prefs.vertical}
+              onToggle={() => setPref(prefs.vertical ? { vertical: false, cameraGameplay: false } : { vertical: true })}
+            />
+            <SwitchRow
+              label={th("optCameraGameplay")}
+              hint={th("optCameraGameplayHint")}
+              disabledHint={th("cameraLayoutNeedsVideo")}
+              on={cameraMode}
+              disabled={!cameraAvailable}
+              onToggle={() => setPref(prefs.cameraGameplay
+                ? { cameraGameplay: false }
+                : { cameraGameplay: true, vertical: true, autoZoom: false })}
+            />
+            {cameraMode && (
+              <button
+                type="button"
+                onClick={onOpenCamera}
+                disabled={!cameraAvailable}
+                className="mb-1 ml-2 inline-flex items-center gap-1.5 self-start rounded-lg border border-ember/40 bg-ember/5 px-2.5 py-1.5 text-[11px] font-semibold text-ember transition-colors hover:bg-ember/10 disabled:opacity-40"
+              >
+                <LuCrop className="h-3.5 w-3.5" />
+                {th("cameraLayoutEdit")}
+              </button>
+            )}
             <SwitchRow
               label={th("optAlsoLandscape")}
               hint={th("optAlsoLandscapeHint")}
@@ -142,13 +173,21 @@ export function ExportPanel({
               disabled={!prefs.vertical}
               onToggle={() => setPref({ alsoLandscape: !prefs.alsoLandscape })}
             />
-            <SwitchRow label={th("optTrimUi")} hint={th("optTrimUiHint")} on={prefs.trimUi} onToggle={() => setPref({ trimUi: !prefs.trimUi })} />
+            <SwitchRow
+              label={th("optTrimUi")}
+              hint={th("optTrimUiHint")}
+              disabledHint={th("cameraLayoutManualCrop")}
+              on={prefs.trimUi && !cameraMode}
+              disabled={cameraMode}
+              onToggle={() => setPref({ trimUi: !prefs.trimUi })}
+            />
             <SwitchRow label={th("optTitleCard")} hint={th("optTitleCardHint")} on={prefs.titleCard} onToggle={() => setPref({ titleCard: !prefs.titleCard })} />
             <SwitchRow
               label={th("optAutoZoom")}
               hint={th("optAutoZoomHint")}
-              on={prefs.autoZoom && prefs.vertical}
-              disabled={!prefs.vertical}
+              on={prefs.autoZoom && prefs.vertical && !cameraMode}
+              disabled={!prefs.vertical || cameraMode}
+              disabledHint={th("cameraLayoutNoZoom")}
               onToggle={() => setPref({ autoZoom: !prefs.autoZoom })}
             />
             <SwitchRow

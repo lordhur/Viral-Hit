@@ -10,6 +10,7 @@
  */
 
 import type { ProductionJob, RecapJobInput } from "./production";
+import type { CameraGameplayLayout } from "./camera-layout";
 
 /** Normalized description of an imported media file. */
 export interface MediaInfo {
@@ -487,6 +488,8 @@ export const QUALITY_CRF: Record<ExportQuality, number> = {
 export interface ExportOptions {
   /** Center-crop reframe to 9:16 vertical (1080×1920) — short-video ready. */
   vertical: boolean;
+  /** Même source en deux zones : cadre caméra manuel au-dessus du gameplay. */
+  cameraGameplay?: CameraGameplayLayout;
   /** Caption style to burn into the picture. */
   captionStyle: CaptionStyleChoice;
   /** Splice out intra-clip silences for a tighter, hand-edited rhythm. */

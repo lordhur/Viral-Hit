@@ -20,6 +20,12 @@ import { colorOutputArgs, hdrToneMapFilter, type ColorRenderPlan } from "./color
 import { ffmpegAudioStreamSpecifier, ffmpegVideoStreamSpecifier } from "./probe";
 import { videoEncoderArgs, type VideoEncoder } from "./video-encoder";
 import { visualEnhanceFilter, type VisualEnhancePlan } from "./visual-enhance";
+import {
+  normalizeCameraGameplayLayout,
+  VERTICAL_HEIGHT,
+  VERTICAL_WIDTH,
+  type CameraGameplayLayout,
+} from "../shared/camera-layout";
 
 /**
  * Social loudness target (EBU R128): -14 LUFS integrated, -1.5 dBTP true-peak
@@ -97,6 +103,8 @@ export interface CutOptions {
   trackPlan?: { cropXExpr: string; cropW: number; cropH: number; cropY: number };
   /** Reframe to 9:16 vertical (center crop → 1080×1920). Requires re-encode. */
   vertical?: boolean;
+  /** Manual camera crop above a center-cropped gameplay view of the same source. */
+  cameraGameplay?: CameraGameplayLayout;
   /**
    * 自动运镜:竖屏成片叠一层缓慢推拉(见 autozoom.ts)。需要源帧率——
    * zoompan 不传 fps 会把素材重采样到 25fps。字段齐全才生效。
@@ -230,6 +238,29 @@ export function escapeFilterPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
 }
 
+/**
+ * Une source horizontale devient deux vues synchronisées : le cadre caméra
+ * manuel en haut, puis le gameplay en remplissage centré. Le graphe reste
+ * compatible avec les finitions et sous-titres ajoutés après le vstack.
+ */
+export function buildCameraGameplayFilter(value: CameraGameplayLayout): string {
+  const layout = normalizeCameraGameplayLayout(value);
+  if (!layout) throw new Error("Cadrage caméra invalide");
+  const { x, y, w, h } = layout.cameraCrop;
+  const topHeight = Math.round((VERTICAL_HEIGHT * layout.cameraHeightFrac) / 2) * 2;
+  const bottomHeight = VERTICAL_HEIGHT - topHeight;
+  const n = (value: number): string => value.toFixed(6);
+  const sourceCrop = `crop=w='max(2,floor(iw*${n(w)}/2)*2)':h='max(2,floor(ih*${n(h)}/2)*2)':x='floor(iw*${n(x)}/2)*2':y='floor(ih*${n(y)}/2)*2'`;
+  const fit = (height: number): string =>
+    `scale=w=${VERTICAL_WIDTH}:h=${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=w=${VERTICAL_WIDTH}:h=${height}:x=0:y=0,setsar=1`;
+  return [
+    `split=2[vh_cam][vh_game]`,
+    `[vh_cam]${sourceCrop},${fit(topHeight)}[vh_camera]`,
+    `[vh_game]${fit(bottomHeight)}[vh_gameplay]`,
+    `[vh_camera][vh_gameplay]vstack=inputs=2`,
+  ].join(";");
+}
+
 /** Compose the -vf chain for reframing + caption burn-in. Empty = no filter. */
 export function buildVideoFilters(options: CutOptions): string[] {
   const filters: string[] = [];
@@ -239,6 +270,16 @@ export function buildVideoFilters(options: CutOptions): string[] {
   // the resulting SDR signal, preventing overlays from being tone-mapped too.
   if (toneMap) filters.push(toneMap);
   const enhance = visualEnhanceFilter(options.visualEnhance);
+  const cameraGameplay = options.vertical ? normalizeCameraGameplayLayout(options.cameraGameplay) : null;
+  if (cameraGameplay) {
+    filters.push(buildCameraGameplayFilter(cameraGameplay));
+    if (enhance) filters.push(enhance);
+    if (options.subtitlePath) {
+      const fonts = options.fontsDir ? `:fontsdir='${escapeFilterPath(options.fontsDir)}'` : "";
+      filters.push(`subtitles=filename='${escapeFilterPath(options.subtitlePath)}'${fonts}`);
+    }
+    return filters;
+  }
   // 自动运镜:zoompan 顶替 scale 那一步(它自己出目标尺寸);返回 null 就照旧
   const zoom = options.autoZoom
     ? buildZoomFilter(options.autoZoom.durationSec, options.autoZoom.fps, 1080, 1920, {

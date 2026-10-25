@@ -61,6 +61,10 @@ Le desktop et le serveur partagent le même répertoire de données Viral Hit. P
 - Export MP4, couverture, SRT, timeline/EDL, brouillon Jianying, packs de publication et de série.
 - Contrôle qualité : durée, noir, silence, gel, loudness, coupures de parole et alertes de contenu ; réparations bornées et consignées.
 
+**Mode automatique par score :** le bouton **Créer les shorts automatiquement** transcrit la source, classe les moments par viralité et exporte jusqu’aux six meilleurs clips non chevauchants, sans retenir ceux qui exigent une révision. Le moteur gratuit donne davantage de poids à l’accroche, au sens, à la densité d’information, à la structure et au débit de la transcription française ; les pics audio/vidéo restent des preuves complémentaires.
+
+**Caméra au-dessus du gameplay :** dans les réglages d’export, activez **Caméra au-dessus du gameplay**, puis cliquez sur **Positionner le cadre caméra**. Déplacez le cadre sur la vidéo horizontale, tirez sa poignée orange pour le redimensionner et vérifiez l’aperçu 9:16 à différents moments. L’export 1080×1920 place ce cadre en haut et le gameplay de la même source en dessous. Le cadrage est conservé dans les préférences et les préréglages d’export.
+
 ### 2. Récap vidéo narré
 
 - Modes `full`, `cut` et `dub`, avec une ou plusieurs sources (`cut` pour multi-sources).
