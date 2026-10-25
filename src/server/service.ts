@@ -72,7 +72,8 @@ import { sanitizeBrand } from "../core/brand";
 import { runDoctor } from "../core/doctor";
 import { clearRenderCache } from "../core/render-cache";
 import { clearEvidenceIndex } from "../core/evidence-index";
-import { ensureModel, isModelInstalled, FIRERED_MODEL, PARAFORMER_MODEL, SENSEVOICE_MODEL, WHISPER_FR_MODEL, WHISPER_FR_SMALL_MODEL } from "../core/models";
+import { ensureModel, isModelInstalled, FIRERED_MODEL, PARAFORMER_MODEL, SENSEVOICE_MODEL, WHISPER_FR_MODEL, WHISPER_FR_SMALL_MODEL, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "../core/models";
+import { labelTranscript, runDiarization } from "../core/diarize";
 import { inspectModels, moveModelsDir } from "../core/models-inventory";
 import { defaultModelsRoot, readAppSettings, writeAppSettings } from "../core/app-settings";
 import { qwenHealth } from "../core/transcribe/qwen-local";
@@ -104,6 +105,15 @@ function llmArg(value: unknown): LlmConfig {
 
 function optionalLlm(value: unknown): LlmConfig | null {
   try { return value ? llmArg(value) : null; } catch { return null; }
+}
+
+/** Browser/server parity with desktop: local models, no paid speech service. */
+async function diarizeTranscript(transcript: Transcript, filePath: string): Promise<Transcript> {
+  const root = modelsRoot();
+  await ensureModel(root, SEGMENTATION_MODEL);
+  await ensureModel(root, SPEAKER_EMBEDDING_MODEL);
+  const turns = await runDiarization(filePath, root);
+  return labelTranscript(transcript, turns);
 }
 
 /** Real local backend for the browser adapter. All paths are confined to managed data. */
@@ -163,7 +173,13 @@ export class LocalService {
     if (!transcript || !Array.isArray(transcript.segments)) throw new Error("Une transcription est requise");
     const filePath = typeof args[2] === "string" && args[2] ? await this.media(args[2]) : undefined;
     const diarize = args[3] === true;
-    if (diarize) throw new Error("La séparation des intervenants nécessite actuellement l’application de bureau");
+    // Speaker attribution is optional and local. As on desktop, a model or
+    // decoding problem must not prevent the user from generating more clips.
+    let labeled: Transcript | undefined;
+    if (diarize && filePath) {
+      transcript = await diarizeTranscript(transcript, filePath).catch(() => transcript);
+      labeled = transcript;
+    }
     const pf = args[4] as { baseUrl?: unknown; model?: unknown } | null | undefined;
     const prefilter = pf && typeof pf.baseUrl === "string" && typeof pf.model === "string" && pf.baseUrl && pf.model
       ? { baseUrl: pf.baseUrl, model: pf.model } : null;
@@ -235,7 +251,7 @@ export class LocalService {
         visionStats = { ...(visionStats ?? { framesTotal: 0, framesScored: 0, peakCount: 0 }), candidatesReviewed: reviewed.stats.reviewed, candidatesAdjusted: reviewed.stats.boosted + reviewed.stats.demoted };
       }
     }
-    return { candidates, transcript: undefined, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats,
+    return { candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats,
       danmaku: danmakuStats, voice: voiceStats, reference: reference ?? null, referenceError };
   }
 

@@ -342,7 +342,7 @@ const frBase = {
     cachedTranscript: "Transcrit",
     danmakuFound: "{n} messages",
     tabCandidates: "Moments forts",
-    tabTranscript: "Transcription",
+    tabTranscript: "Corriger les sous-titres",
     undo: "Annuler",
     redo: "Rétablir",
     nothingToUndo: "Rien à annuler",

@@ -29,6 +29,7 @@ import { parseTranscribeError } from "../../../shared/transcribe-errors";
 import { diffReplacement, applyGlossaryToTranscript, countGlossaryHits, upsertGlossaryEntry } from "../../../shared/glossary";
 import { GlossaryModal } from "./GlossaryModal";
 import { SubtitleImport } from "./SubtitleImport";
+import { TranscriptTextEditor } from "./TranscriptTextEditor";
 import type { Transcript, TranscribeProgressEvent, AsrEngineInfo, GlossaryEntry } from "../../../shared/api-types";
 
 function formatClock(totalSeconds: number): string {
@@ -388,6 +389,7 @@ export function TranscribeView({
                 {t("resultCount", { n: transcript.segments.length, lang: transcript.language })} ·{" "}
                 {transcript.engine.startsWith("subtitle-") ? t("subtitleImported") : usedEngine ? t(usedEngine.name) : t("engineLocal")}
               </p>
+              <p className="mt-1 text-[12px] text-mut/80">{t("editHelp")}</p>
             </div>
             <div className="flex items-center gap-2.5">
               <button
@@ -456,16 +458,7 @@ export function TranscribeView({
               >
                 <span className="shrink-0 font-mono text-[11px] text-ember/90">{formatClock(seg.startSec)}</span>
                 {editingSeg === seg.id ? (
-                  <input
-                    autoFocus
-                    defaultValue={seg.text}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                      if (e.key === "Escape") setEditingSeg(null);
-                    }}
-                    onBlur={(e) => commitSegEdit(seg.id, e.target.value)}
-                    className="w-full rounded-lg border border-ember/60 bg-panel px-2 py-1 text-[14px] leading-relaxed outline-none"
-                  />
+                  <TranscriptTextEditor initialText={seg.text} onSave={(value) => commitSegEdit(seg.id, value)} onCancel={() => setEditingSeg(null)} />
                 ) : (
                   <p className="flex min-w-0 items-baseline gap-1.5 text-[14px] leading-relaxed">
                     <span className="min-w-0">{seg.text}</span>
@@ -479,9 +472,10 @@ export function TranscribeView({
                     )}
                     <button
                       type="button"
+                      aria-label={t("editSegment")}
                       title={t("editSegHint")}
                       onClick={() => setEditingSeg(seg.id)}
-                      className="shrink-0 rounded p-0.5 text-mut opacity-0 transition-opacity group-hover/seg:opacity-100 hover:text-fg"
+                      className="inline-flex shrink-0 items-center rounded-md border border-line bg-panel px-1.5 py-1 text-mut transition-colors hover:border-ember/50 hover:text-ember"
                     >
                       <LuPencil className="h-3 w-3" />
                     </button>

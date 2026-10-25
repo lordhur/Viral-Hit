@@ -452,6 +452,7 @@ function ParamsTab({ onRedetect, onSelectAutomatic }: { onRedetect: () => void; 
             const clipCount = Number(event.target.value);
             setPref({ clipCount });
             onSelectAutomatic(clipCount);
+            dirty();
           }}
           className="w-full rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 text-[12px] outline-none focus:border-ember/60"
         >
@@ -597,9 +598,7 @@ function ParamsTab({ onRedetect, onSelectAutomatic }: { onRedetect: () => void; 
         type="button"
         disabled={detecting}
         onClick={onRedetect}
-        className={`flex h-8.5 items-center justify-center gap-1.5 rounded-lg text-[12.5px] font-bold transition-colors disabled:opacity-40 ${
-          paramsDirty ? "btn-flame text-white" : "border border-line text-mut hover:border-mut hover:text-fg"
-        }`}
+        className="btn-flame flex h-9 items-center justify-center gap-1.5 rounded-lg text-[12.5px] font-bold text-white transition-opacity disabled:opacity-40"
       >
         <LuRefreshCw className={`h-3.5 w-3.5 ${detecting ? "animate-spin" : ""}`} />
         {t("redetect")}

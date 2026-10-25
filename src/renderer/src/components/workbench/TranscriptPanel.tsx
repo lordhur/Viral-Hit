@@ -16,6 +16,7 @@ import { searchVisualEvidence, type VisualEvidenceNote } from "../../../../share
 import { evidenceContext, evidenceResults, nextEvidenceIndex, type EvidenceSource } from "../../../../shared/evidence-navigation";
 import { diffReplacement, applyGlossaryToTranscript, countGlossaryHits, upsertGlossaryEntry } from "../../../../shared/glossary";
 import { GlossaryModal } from "../GlossaryModal";
+import { TranscriptTextEditor } from "../TranscriptTextEditor";
 import type { GlossaryEntry, Transcript } from "../../../../shared/api-types";
 
 const SPEAKER_COLORS = [
@@ -112,6 +113,7 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
         <span className="text-[11px] text-mut">{transcript.engine.startsWith("subtitle-")
           ? t("subtitleResultCount", { n: transcript.segments.length, format: transcript.engine.slice(9).toUpperCase() })
           : t("resultCount", { n: transcript.segments.length, lang: transcript.language })}</span>
+        <span className="hidden truncate text-[10.5px] text-mut/70 xl:block">{t("editHelp")}</span>
         <span className="flex-1" />
         {timingReviewIds.size > 0 && (
           <button
@@ -245,16 +247,7 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
               <span className="shrink-0 font-mono text-[10px] text-mut/70">S{seg.speaker + 1}</span>
             )}
             {editingSeg === seg.id ? (
-              <input
-                autoFocus
-                defaultValue={seg.text}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                  if (e.key === "Escape") setEditingSeg(null);
-                }}
-                onBlur={(e) => commitSegEdit(seg.id, e.target.value)}
-                className="w-full rounded-lg border border-ember/60 bg-panel px-2 py-0.5 text-[13px] leading-relaxed outline-none"
-              />
+              <TranscriptTextEditor initialText={seg.text} onSave={(value) => commitSegEdit(seg.id, value)} onCancel={() => setEditingSeg(null)} />
             ) : (
               <p className="flex min-w-0 items-baseline gap-1.5 text-[13px] leading-relaxed">
                 <span className="min-w-0 break-words">{(() => { const range = hit?.ranges.find((r) => r.segmentId === seg.id); return range ? <>{seg.text.slice(0, range.start)}<mark className="rounded bg-amber-400/25 text-inherit">{seg.text.slice(range.start, range.end)}</mark>{seg.text.slice(range.end)}</> : seg.text; })()}</span>
@@ -270,9 +263,10 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
                 )}
                 <button
                   type="button"
+                  aria-label={t("editSegment")}
                   title={t("editSegHint")}
                   onClick={() => setEditingSeg(seg.id)}
-                  className="shrink-0 rounded p-0.5 text-mut opacity-0 transition-opacity group-hover/seg:opacity-100 focus:opacity-100 hover:text-fg"
+                  className="inline-flex shrink-0 items-center rounded-md border border-line bg-panel px-1.5 py-1 text-mut transition-colors hover:border-ember/50 hover:text-ember"
                 >
                   <LuPencil className="h-3 w-3" />
                 </button>

@@ -4,7 +4,7 @@
  * 三步向导退役——回退不再丢结果,任何环节随时可回。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LuFileVideo, LuAudioLines, LuFolderSearch, LuKeyRound, LuRedo2, LuSparkles, LuTextSelect, LuUndo2 } from "react-icons/lu";
+import { LuFileVideo, LuAudioLines, LuFolderSearch, LuKeyRound, LuPencil, LuRedo2, LuSparkles, LuTextSelect, LuUndo2 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { errorText } from "../i18n/errors";
 import { getApi, isElectron } from "../api/provider";
@@ -408,10 +408,11 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                     key={key}
                     type="button"
                     onClick={() => setTab(key)}
-                    className={`rounded-lg px-3 py-1.5 text-[11.5px] font-bold transition-colors ${
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] font-bold transition-colors ${
                       tab === key ? "bg-ember/12 text-ember" : "text-mut hover:text-fg"
                     }`}
                   >
+                    {key === "transcript" && <LuPencil className="h-3 w-3" />}
                     {label}
                     {key === "candidates" && candidates && <span className="ml-1.5 font-mono text-[10px] tabular-nums">{candidates.length}</span>}
                   </button>
@@ -537,6 +538,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
           defaultOutDir={defaultOutDir}
           onExport={() => startExport()}
           onSelectAutomatic={() => applyAutomaticSelection()}
+          onEditSubtitles={() => setTab("transcript")}
           onOpenPanel={() => setShowExportPanel(true)}
         />
       )}
