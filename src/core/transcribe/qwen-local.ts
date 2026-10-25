@@ -22,12 +22,19 @@ export function localSpeechUrl(value = DEFAULT_QWEN_URL): string {
 }
 
 async function request(url: string, path: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
-  const response = await fetch(`${localSpeechUrl(url)}${path}`, {
-    method: body === undefined ? "GET" : "POST", redirect: "error",
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(body === undefined ? 3000 : 600000)]) : AbortSignal.timeout(body === undefined ? 3000 : 600000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${localSpeechUrl(url)}${path}`, {
+      method: body === undefined ? "GET" : "POST", redirect: "error",
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(body === undefined ? 3000 : 600000)]) : AbortSignal.timeout(body === undefined ? 3000 : 600000),
+    });
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (error instanceof Error && error.name === "TimeoutError") throw new Error("qwen:unavailable");
+    throw new Error("qwen:unavailable");
+  }
   if (!response.ok) { await response.body?.cancel(); throw new Error(`qwen:http-${response.status}`); }
   const reader = response.body?.getReader();
   if (!reader) throw new Error("qwen:empty-response");
@@ -93,7 +100,7 @@ export function qwenTranscriptWords(text: string, stamps: unknown, start: number
 
 export class QwenLocalEngine implements TranscribeEngine {
   id = "qwen3-local";
-  label = "Qwen3-ASR (本地服务 · 可选)";
+  label = "Qwen3-ASR (service local · facultatif)";
   constructor(private url = DEFAULT_QWEN_URL) { localSpeechUrl(url); }
   async isReady(): Promise<boolean> { return qwenHealth(this.url).then(() => true, () => false); }
   async transcribe(filePath: string, options: TranscribeOptions = {}): Promise<Transcript> {

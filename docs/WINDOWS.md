@@ -71,28 +71,36 @@ Si vous avez modifié le code manuellement, le programme de mise à jour s'arrê
 
 Les modèles téléchargés ultérieurement restent dans l'espace de données Viral Hit et ne sont pas recréés par une mise à jour du code.
 
-## 5. Configurer un fournisseur d'IA
+## 5. Mode gratuit et options locales
 
-Pour une utilisation ponctuelle, ouvrez **Réglages** dans Viral Hit et saisissez le fournisseur, l'endpoint, le modèle et la clé. Une clé saisie dans l'interface reste seulement en mémoire pendant la session.
+**Aucune clé API n'est nécessaire pour créer des clips.** La détection utilise le moteur intégré et la transcription française utilise Whisper local. Au premier lancement de la transcription, Whisper Base (environ 198 Mio) est téléchargé une seule fois dans le cache persistant ; les mises à jour ne le téléchargent pas à nouveau.
 
-Pour une configuration durable du CLI, de MCP et des récaps, ouvrez le fichier `.env` :
+Pour remplacer explicitement la détection intégrée par Ollama, ouvrez le fichier `.env` :
 
 ```powershell
 notepad "$env:LOCALAPPDATA\Programs\ViralHit\.env"
 ```
 
-Renseignez les valeurs sans guillemets inutiles, par exemple :
+Puis configurez un modèle réellement installé :
 
 ```dotenv
 VIRALHIT_LLM_PROVIDER=ollama
 VIRALHIT_LLM_BASE_URL=http://127.0.0.1:11434/v1
-VIRALHIT_LLM_MODEL=qwen3:8b
+VIRALHIT_LLM_MODEL=qwen3:4b
 VIRALHIT_LLM_API_KEY=
 ```
 
-Pour un fournisseur cloud, utilisez son endpoint, un modèle disponible sur votre compte et votre propre clé. Ne partagez jamais ce fichier `.env`.
+Revenez à `VIRALHIT_LLM_PROVIDER=builtin` pour le défaut gratuit. Les fournisseurs cloud historiques ne sont pas nécessaires et ne sont pas proposés dans le parcours normal.
 
 ## 6. Dépannage
+
+### `Échec de la détection … HTTP 401 … invalid token`
+
+Lancez **Mettre à jour Viral Hit**, fermez puis rouvrez l'application. La version à jour migre l'ancienne configuration cloud vers le moteur intégré et supprime le jeton enregistré. Ne saisissez pas de nouvelle clé : elle n'est pas nécessaire. Les projets et exports sont conservés.
+
+### La transcription française ne démarre pas
+
+Vérifiez que **Français · Whisper local (défaut)** est sélectionné. Le premier lancement nécessite une connexion pour télécharger environ 198 Mio, puis fonctionne hors ligne. En cas d'interruption, relancez la transcription : le téléchargement et les fenêtres déjà calculées peuvent reprendre. Ne choisissez pas SenseVoice pour du français.
 
 ### `pnpm`, `git`, `node` ou `python` est introuvable
 

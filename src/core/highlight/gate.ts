@@ -101,19 +101,20 @@ export function speakerTangled(
 export function ruleGateIssues(
   transcript: Transcript,
   candidate: HighlightCandidate,
-  zh: boolean
+  zh: boolean,
+  locale: "en" | "fr" = "en"
 ): string[] {
   // 信号候选(跳舞/萌宠等)不是按原话切的,文本规则对它没有意义
   if (candidate.boundary === "signal") return [];
   const issues: string[] = [];
   if (openingDangles(candidate.text)) {
-    issues.push(zh ? "开头像半截话(悬空接续词)" : "opens mid-thought (dangling connective)");
+    issues.push(zh ? "开头像半截话(悬空接续词)" : locale === "fr" ? "le début semble coupé au milieu d’une idée" : "opens mid-thought (dangling connective)");
   }
   if (endingUnfinished(candidate.text)) {
-    issues.push(zh ? "结尾没收住(截在逗号上)" : "ends unfinished (cut on a comma)");
+    issues.push(zh ? "结尾没收住(截在逗号上)" : locale === "fr" ? "la fin semble inachevée (coupure sur une virgule)" : "ends unfinished (cut on a comma)");
   }
   if (speakerTangled(transcript, candidate)) {
-    issues.push(zh ? "多人抢话密集,单独看可能听不懂" : "dense speaker overlap, may not stand alone");
+    issues.push(zh ? "多人抢话密集,单独看可能听不懂" : locale === "fr" ? "les intervenants se coupent fréquemment la parole" : "dense speaker overlap, may not stand alone");
   }
   return issues;
 }
@@ -127,10 +128,11 @@ export function ruleGateIssues(
 export function applyRuleGate(
   transcript: Transcript,
   candidates: HighlightCandidate[],
-  zh: boolean
+  zh: boolean,
+  locale: "en" | "fr" = "en"
 ): HighlightCandidate[] {
   return candidates.map((c) => {
-    const issues = ruleGateIssues(transcript, c, zh);
+    const issues = ruleGateIssues(transcript, c, zh, locale);
     if (issues.length === 0) return c;
     const demote = c.gate === "publish" || c.gate === undefined;
     return {

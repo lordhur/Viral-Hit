@@ -11,6 +11,28 @@ export type { ProductionJob, RecapJobInput } from "../shared/production";
 
 interface StoredJobs { version: 1; jobs: ProductionJob[] }
 
+function isLoopbackHttp(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && ["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+/** Aucun fournisseur payant n'est contacté implicitement par le récap autonome. */
+function freeRecapReady(input: RecapJobInput): boolean {
+  const env = process.env;
+  const provider = (env.VIRALHIT_LLM_PROVIDER ?? "").toLowerCase();
+  const baseUrl = env.VIRALHIT_LLM_BASE_URL ?? env.HOTCLIP_LLM_BASE_URL;
+  const localLlm = Boolean((env.VIRALHIT_LLM_MODEL ?? env.HOTCLIP_LLM_MODEL) && (provider === "ollama" || isLoopbackHttp(baseUrl)));
+  const localTts = env.TTS_PROVIDER === "index-tts" && isLoopbackHttp(env.INDEX_TTS_ENDPOINT) && Boolean(env.INDEX_TTS_VOICE?.trim());
+  // Le chemin MiMo ASR historique est cloud. Le mode gratuit exige donc soit
+  // des preuves déjà présentes dans le dossier de reprise, soit --skip-asr.
+  return localLlm && localTts && input.skipAsr === true;
+}
+
 function validJob(value: unknown): value is ProductionJob {
   if (!value || typeof value !== "object") return false;
   const row = value as Partial<ProductionJob>;
@@ -39,7 +61,7 @@ export class JobManager {
       for (const job of raw.jobs.filter(validJob).slice(0, 200)) {
         if (job.status === "running" || job.status === "queued") {
           job.status = "interrupted";
-          job.error = "The local server stopped before this run completed; resume from its work directory.";
+          job.error = "Le serveur local s’est arrêté avant la fin de cette production. Reprenez depuis son dossier de travail.";
           job.updatedAt = new Date().toISOString();
         }
         this.jobs.set(job.id, job);
@@ -76,8 +98,10 @@ export class JobManager {
   async startRecap(input: RecapJobInput, managedOnly = true): Promise<ProductionJob> {
     await this.load();
     if (!Array.isArray(input.videos) || input.videos.length < 1 || input.videos.length > 40 || input.videos.some((path) => typeof path !== "string" || !path.trim())) {
-      throw new Error("Choose between 1 and 40 source videos");
+      throw new Error("Choisissez entre 1 et 40 vidéos sources");
     }
+    const allowCloud = process.env.VIRALHIT_RECAP_ALLOW_CLOUD === "1";
+    if (!allowCloud && !freeRecapReady(input)) throw new Error("recap:local-setup-required");
     const data = serverDataDir();
     const videos = input.videos.map((path) => managedOnly ? assertInside(data, path) : resolve(path));
     const id = randomUUID();
@@ -105,7 +129,15 @@ export class JobManager {
     if (input.burnSubtitles === false) args.push("--no-burn-subtitles");
     if (input.confirmVoiceRights) args.push("--confirm-voice-rights");
     const python = process.env.VIRALHIT_PYTHON || "python3";
-    const child = spawn(python, args, { cwd: serverRoot(), env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    const childEnv = { ...process.env };
+    if (!allowCloud) {
+      // Un ancien MIMO_API_KEY/FISH_API_KEY présent dans l’environnement ne doit
+      // pas réactiver un appel cloud dans un sous-script du pipeline local.
+      for (const key of Object.keys(childEnv)) {
+        if (/^(?:MIMO|FISH)_.*(?:API_KEY|KEY)$/.test(key) || ["MIMO_API_KEY", "FISH_API_KEY"].includes(key)) delete childEnv[key];
+      }
+    }
+    const child = spawn(python, args, { cwd: serverRoot(), env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
     this.children.set(id, child);
     const log = createWriteStream(job.logPath, { flags: "a", mode: 0o600 });
     child.stdout.pipe(log);
@@ -125,10 +157,10 @@ export class JobManager {
             const receipt = JSON.parse(await readFile(join(workDir, "viral_hit_receipt.json"), "utf8")) as { final_output?: string };
             await this.update(job, { status: "completed", finalOutput: receipt.final_output ?? null, error: null });
           } catch {
-            await this.update(job, { status: "failed", error: "The pipeline exited without its completion receipt" });
+            await this.update(job, { status: "failed", error: "Le pipeline s’est terminé sans produire son reçu de finalisation" });
           }
         } else {
-          await this.update(job, { status: "failed", error: `Recap exited with ${signal ?? `code ${code ?? "unknown"}`}; see ${job.logPath}` });
+          await this.update(job, { status: "failed", error: `Le récap s’est arrêté (${signal ?? `code ${code ?? "inconnu"}`}). Consultez le journal : ${job.logPath}` });
         }
       })().finally(() => log.end());
     });
@@ -139,7 +171,7 @@ export class JobManager {
     const job = this.jobs.get(id);
     const child = this.children.get(id);
     if (!job || !child || (job.status !== "running" && job.status !== "queued")) return false;
-    await this.update(job, { status: "cancelled", error: "Cancelled by user; completed artefacts are kept for resume" });
+    await this.update(job, { status: "cancelled", error: "Production annulée ; les artefacts terminés sont conservés pour reprendre" });
     child.kill("SIGTERM");
     const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
     timer.unref();

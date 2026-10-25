@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LuFolderSearch, LuX, LuPlay, LuSquare, LuCircleCheck, LuCircleAlert, LuLoaderCircle, LuCopy, LuCheck, LuRotateCcw, LuTrash2 } from "react-icons/lu";
 import { useT } from "../i18n/store";
+import { errorText } from "../i18n/errors";
 import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady } from "../stores/llm-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
@@ -139,7 +140,7 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
             {t("title")}
             {running && <span className="ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />}
           </h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-mut transition-colors hover:text-fg" aria-label="close">
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-mut transition-colors hover:text-fg" aria-label="Fermer">
             <LuX className="h-4.5 w-4.5" />
           </button>
         </div>
@@ -263,7 +264,7 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
                             <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-mut">{t(`task_${task.status}`)}</span>
                             {task.attempts > 1 && <span className="shrink-0 text-[10px] text-mut">{t("attempts", { n: task.attempts })}</span>}
                           </div>
-                          <p className="mt-1 truncate text-[11px] text-mut" title={task.error}>{task.status === "completed" ? t("doneClips", { n: task.clips ?? 0 }) : task.status === "interrupted" ? t("interruptedHint") : task.error ?? t(`stage_${task.stage}`)}</p>
+                          <p className="mt-1 truncate text-[11px] text-mut" title={task.error ? errorText(task.error) : undefined}>{task.status === "completed" ? t("doneClips", { n: task.clips ?? 0 }) : task.status === "interrupted" ? t("interruptedHint") : task.error ? errorText(task.error) : t(`stage_${task.stage}`)}</p>
                         </div>
                         {active && <button type="button" onClick={() => void cancelTask(task.id)} className="rounded-md border border-line px-2 py-1 text-[10.5px] text-mut hover:border-red-400/40 hover:text-red-300">{t("cancelTask")}</button>}
                         {retryable && <button type="button" disabled={!llmOk} onClick={() => void retryTask(task.id)} className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[10.5px] text-mut hover:border-ember/40 hover:text-ember disabled:opacity-40"><LuRotateCcw aria-hidden="true" className="h-3 w-3" />{t("retryTask")}</button>}
@@ -283,7 +284,7 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
                   return <li key={`${e.path}-${e.type}-${i}`} className="flex items-start gap-2 text-[12px]">
                     <span className="shrink-0 font-mono text-[11px] text-mut">{fmtTime(e.at)}</span>
                     <span className={`font-semibold ${meta.cls}`}>{meta.label}</span>
-                    <span className="min-w-0 break-all text-fg/90">{e.file}{e.type === "done" ? ` · ${t("doneClips", { n: e.clips ?? 0 })}` : ""}{e.type === "error" && e.message ? ` · ${e.message}` : ""}</span>
+                    <span className="min-w-0 break-all text-fg/90">{e.file}{e.type === "done" ? ` · ${t("doneClips", { n: e.clips ?? 0 })}` : ""}{e.type === "error" && e.message ? ` · ${errorText(e.message)}` : ""}</span>
                   </li>;
                 })}
               </ul>

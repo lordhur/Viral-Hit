@@ -33,6 +33,13 @@ export interface Scheme {
   prefs: SchemeSnapshot;
 }
 
+function newSchemeName(): string {
+  let locale = typeof document !== "undefined" && document.documentElement.lang ? document.documentElement.lang : typeof navigator !== "undefined" ? navigator.language : "zh";
+  try { locale = localStorage.getItem("viral-hit-locale") ?? localStorage.getItem("hotclip-locale") ?? locale; } catch { /* stockage indisponible */ }
+  const language = locale.toLowerCase().split("-")[0];
+  return language === "fr" ? "Mon projet d’export" : language === "en" ? "My export preset" : "我的方案";
+}
+
 function snap(overrides: Partial<SchemeSnapshot> = {}): SchemeSnapshot {
   const out = {} as Record<string, unknown>;
   for (const k of SCHEME_KEYS) out[k] = RENDER_PREF_DEFAULTS[k];
@@ -107,7 +114,7 @@ interface SchemeState {
 export const useSchemes = create<SchemeState>((set, get) => ({
   userSchemes: loadUserSchemes(),
   saveCurrent: (name, prefs) => {
-    const scheme: Scheme = { id: `user-${Date.now()}`, name: name.slice(0, 20) || "我的方案", prefs: snapshotOf(prefs) };
+    const scheme: Scheme = { id: `user-${Date.now()}`, name: name.slice(0, 20) || newSchemeName(), prefs: snapshotOf(prefs) };
     const userSchemes = [...get().userSchemes, scheme].slice(-8); // 上限 8 个,先进先出
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userSchemes));

@@ -12,8 +12,8 @@ export function llmRequestBudget(timeoutMs: number, retries = 0): LlmRequestBudg
 export class LlmTransportError extends Error {
   constructor(readonly kind: "timeout" | "response-too-large") {
     super(kind === "timeout"
-      ? "模型响应超时，请稍后重试或选择更小的模型。/ Model response timed out; retry later or choose a smaller model."
-      : "模型响应过大，已停止读取；请检查接口地址或换一个模型。/ Model response too large; check the endpoint or choose another model.");
+      ? "Le modèle IA a dépassé le délai de réponse. Réessayez, choisissez un modèle local plus léger ou utilisez le moteur gratuit intégré."
+      : "La réponse du modèle IA est trop volumineuse. Vérifiez l’adresse du service ou choisissez un autre modèle.");
     this.name = "LlmTransportError";
   }
 }

@@ -12,6 +12,7 @@ import { stat } from "fs/promises";
 import type { GlossaryEntry, LlmConfig, Transcript, HighlightCandidate } from "../shared/api-types";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { SenseVoiceEngine } from "./transcribe/sensevoice";
+import { WhisperFrenchEngine } from "./transcribe/whisper";
 import { importSubtitleFile } from "./subtitle-import";
 import { readTranscriptCache, writeTranscriptCache } from "./transcribe/cache";
 import { detectHighlights } from "./highlight/detect";
@@ -89,16 +90,18 @@ export async function transcribeCached(
   // replace it with ASR or run ASR glossary corrections over reviewed subtitles.
   if (subtitlePath !== undefined) return importSubtitleFile(videoPath, subtitlePath, signal);
   const s = await stat(videoPath).catch(() => null);
-  if (!s || !s.isFile()) throw new Error(`文件不存在或不可读: ${videoPath}`);
+  if (!s || !s.isFile()) throw new Error(`Le fichier est introuvable ou illisible : ${videoPath}`);
   const fileStat = { size: s.size, mtimeMs: s.mtimeMs };
   const applied = (t: Transcript): Transcript => applyGlossaryToTranscript(t, glossary ?? []).transcript;
-  const engineId = asr.engineId ?? "sensevoice";
-  if (!["sensevoice", "paraformer", "fireredasr", "qwen3"].includes(engineId)) throw new Error("Unknown local ASR engine");
+  const engineId = asr.engineId ?? "whisper-fr";
+  if (!["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"].includes(engineId)) throw new Error("Ce moteur de transcription local n’est pas pris en charge");
   const cached = !asr.restart && engineId !== "qwen3" ? await readTranscriptCache(cacheDir, videoPath, fileStat, engineId) : undefined;
   if (cached) return applied(cached);
   const engine = engineId === "qwen3" ? new QwenLocalEngine(asr.localServiceUrl)
     : engineId === "paraformer" ? new ParaformerEngine(modelsRoot)
-    : engineId === "fireredasr" ? new FireRedEngine(modelsRoot) : new SenseVoiceEngine(modelsRoot);
+    : engineId === "fireredasr" ? new FireRedEngine(modelsRoot)
+    : engineId === "sensevoice" ? new SenseVoiceEngine(modelsRoot)
+    : new WhisperFrenchEngine(modelsRoot);
   const t = await engine.transcribe(videoPath, { ...asr, signal, cacheDir });
   if (engineId !== "qwen3") await writeTranscriptCache(cacheDir, videoPath, fileStat, engineId, t).catch(() => {});
   return applied(t);
@@ -139,7 +142,7 @@ export async function detectForPipeline(
   transcript: Transcript,
   cfg: Pick<AutoClipConfig, "modelsRoot" | "evidenceCacheDir" | "llm" | "maxClips" | "reference" | "reviewMemory" | "performanceMemory" | "signal">
 ): Promise<HighlightCandidate[]> {
-  if (transcript.segments.length === 0) throw new Error("转写结果为空(可能是无人声素材)");
+  if (transcript.segments.length === 0) throw new Error("La transcription est vide ; ce média ne contient peut-être aucune parole");
   const media = await probeMedia(videoPath).catch(() => null);
   const analysis: AnalysisVideoOptions = media?.hasVideo
     ? { videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) }

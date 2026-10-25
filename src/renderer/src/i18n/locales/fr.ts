@@ -1,11 +1,12 @@
 import { en } from "./en";
+import { frComplete } from "./fr-complete";
 
 /**
  * French locale. Namespaces are overlaid on English so a newly added upstream
  * label remains readable instead of crashing the UI; primary workflows are
  * translated here, not machine-translated at runtime.
  */
-export const fr = {
+const frBase = {
   ...en,
   common: {
     ...en.common,
@@ -68,6 +69,7 @@ export const fr = {
     openFolder: "Ouvrir le dossier",
     useDefault: "Valeur par défaut",
     change: "Modifier",
+    useAsrFrench: "Français · Whisper local",
     useAsrFast: "Voix · rapide",
     useAsrAccurate: "Voix · précise",
     useAsrDialect: "Voix · dialectes",
@@ -562,3 +564,11 @@ export const fr = {
     preview: "Aperçu du récap final",
   },
 } as const;
+
+const completed: Record<string, Record<string, string>> = { ...frBase };
+for (const [namespace, values] of Object.entries(frComplete)) {
+  completed[namespace] = { ...(completed[namespace] ?? {}), ...values };
+}
+
+/** Dictionnaire français complet ; les ajouts restent relus séparément du socle historique. */
+export const fr = completed;

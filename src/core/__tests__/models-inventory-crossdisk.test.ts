@@ -77,7 +77,7 @@ describe("moveModelsDir 跨盘", () => {
       return realCp(...args);
     });
 
-    await expect(moveModelsDir(from, to)).rejects.toThrow(/原目录未改动/);
+    await expect(moveModelsDir(from, to)).rejects.toThrow(/dossier d’origine n’a pas été modifié/);
 
     expect(await dirSize(from)).toBe(5120); // 原件一个字节没少
     expect(await readFile(join(from, "yunet", "face.onnx"), "utf8")).toBe("y".repeat(1024));
@@ -94,7 +94,7 @@ describe("moveModelsDir 跨盘", () => {
       await writeFile(join(dest, "truncated.bin"), "z");
     });
 
-    await expect(moveModelsDir(from, to)).rejects.toThrow(/原目录未改动/);
+    await expect(moveModelsDir(from, to)).rejects.toThrow(/dossier d’origine n’a pas été modifié/);
     expect(await dirSize(from)).toBe(5120);
   });
 });

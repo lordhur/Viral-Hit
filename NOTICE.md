@@ -19,6 +19,7 @@ The original `HotClipApi` type, `hotclip` IPC channel names and selected legacy 
 
 ## Bundled resources
 
+- OpenAI Whisper Base is downloaded as a separate local ASR model through the sherpa-onnx project; Whisper is distributed under MIT, see `licenses/WHISPER-MIT.txt`.
 - Source Han Sans SC Bold is distributed under SIL OFL 1.1; see `licenses/SOURCE-HAN-SANS-OFL-1.1.txt`.
 - FFmpeg and FFprobe are resolved from separately distributed packages or user-provided installations; their package licenses remain with those distributions.
 - The Viral Hit logo and generated build icon are original project assets.

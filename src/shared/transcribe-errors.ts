@@ -13,7 +13,7 @@ export const ERR_TAG_MODEL_DOWNLOAD = "[hotclip:model-download]";
 /** 模型已在却加载失败——最常见是 Windows 中文路径原生层打不开(issue #4),其次是模型文件损坏。 */
 export const ERR_TAG_MODEL_LOAD = "[hotclip:model-load]";
 
-export type TranscribeErrorKind = "no-audio" | "model-download" | "model-load" | "generic";
+export type TranscribeErrorKind = "no-audio" | "model-download" | "model-load" | "local-service" | "generic";
 
 /**
  * 主进程侧:根据失败后的补充探测结果给原始错误打标记。
@@ -51,6 +51,8 @@ export function parseTranscribeError(raw: string): { kind: TranscribeErrorKind; 
   } else if (detail.includes(ERR_TAG_MODEL_LOAD)) {
     kind = "model-load";
     detail = detail.replace(ERR_TAG_MODEL_LOAD, "").trim();
+  } else if (/qwen:/i.test(detail)) {
+    kind = "local-service";
   }
   return { kind, detail };
 }

@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LuFileVideo, LuAudioLines, LuFolderSearch, LuKeyRound, LuRedo2, LuSparkles, LuTextSelect, LuUndo2 } from "react-icons/lu";
 import { useT } from "../i18n/store";
+import { errorText } from "../i18n/errors";
 import { getApi, isElectron } from "../api/provider";
 import { useSession } from "../stores/session-store";
 import { useLlmStore, isLlmReady } from "../stores/llm-store";
@@ -149,7 +150,7 @@ function StatsLine(): React.JSX.Element | null {
       cls: "text-teal-300/90",
       text: th("voiceScanned", { windows: stats.voice.windowsScored, emo: stats.voice.emotionPeakCount, evt: stats.voice.eventPeakCount }),
     });
-  if (stats.referenceError) bits.push({ key: "refErr", cls: "text-amber-400/90", text: th("refFailed", { msg: stats.referenceError }) });
+  if (stats.referenceError) bits.push({ key: "refErr", cls: "text-amber-400/90", text: th("refFailed", { msg: errorText(stats.referenceError) }) });
   if (bits.length === 0) return null;
   return (
     <p className="truncate text-[10px]" title={bits.map((b) => b.text).join("\n")}>

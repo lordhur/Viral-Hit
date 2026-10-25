@@ -22,10 +22,19 @@ export interface AsrEngineFacts {
 }
 
 /**
- * Order = display order. The first entry is the zero-config default:
- * smallest download, fully offline, five languages.
+ * Order = display order. The first entry is the free French default;
+ * every local model is downloaded once and cached across updates.
  */
 export const ASR_CATALOG: AsrEngineFacts[] = [
+  {
+    id: "whisper-fr",
+    kind: "local",
+    langs: ["fr"],
+    sizeMB: 198,
+    speed: 2,
+    accuracy: 2,
+    uploads: false,
+  },
   {
     id: "sensevoice",
     kind: "local",

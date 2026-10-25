@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getApi } from "../../api/provider";
 import { useT } from "../../i18n/store";
+import { errorText } from "../../i18n/errors";
 import { useSession } from "../../stores/session-store";
 import { useAsrStore } from "../../stores/asr-store";
 import type { AlignmentPreview, Transcript } from "../../../../shared/api-types";
@@ -28,13 +29,13 @@ export function AlignmentReview({ transcript, selectedIds, onAudition }: { trans
       const result = await getApi().previewAlignment(file.path, transcript, { segmentIds: selectedIds, engine, language: language === "auto" ? transcript.language : language, localServiceUrl: useAsrStore.getState().localServiceUrl });
       if (id === serial.current && current.current === before.current) setPreview(result);
     } catch (error) {
-      if (id === serial.current) setError(String(error).includes("cancelled") ? t("speechCancelled") : `${t("alignFailed")} ${String(error).replace(/^Error: /, "")}`);
+      if (id === serial.current) setError(String(error).includes("cancelled") ? t("speechCancelled") : `${t("alignFailed")} ${errorText(error)}`);
     } finally { if (id === serial.current) setBusy(false); }
   };
   return <div className="shrink-0 space-y-2 border-b border-line/60 px-3 py-2 text-xs">
     <div className="flex flex-wrap items-center gap-2">
       <label>{t("alignEngine")} <select aria-label={t("alignEngine")} value={engine} disabled={busy} onChange={(e) => setEngine(e.target.value as typeof engine)} className="rounded border border-line bg-panel-2 p-1.5">
-        <option value="paraformer">Paraformer · 中文 / English</option><option value="qwen3">Qwen3 · {t("localServiceName")}</option>
+        <option value="paraformer">Paraformer · zh / en</option><option value="qwen3">Qwen3 · {t("localServiceName")}</option>
       </select></label>
       <label>{t("alignLanguage")} <select aria-label={t("alignLanguage")} value={language} disabled={busy} onChange={(e) => setLanguage(e.target.value)} className="rounded border border-line bg-panel-2 p-1.5">
         <option value="auto">{t("alignLanguageAuto")}</option>

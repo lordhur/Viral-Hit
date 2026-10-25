@@ -25,6 +25,7 @@ import type {
 import { applyGlossaryToTranscript, sanitizeGlossary } from "../../../shared/glossary";
 import { parseSubtitleTranscript } from "../../../shared/subtitle-import";
 import { clipDurationSec } from "../../../shared/pieces";
+import { localizedError } from "../i18n/errors";
 
 const MOCK_MEDIA: MediaInfo = {
   durationSec: 5427.4, // 1:30:27 — a typical podcast episode
@@ -299,7 +300,7 @@ const browserMock: HotClipApi = {
   },
   async listAsrEngines() {
     await sleep(200);
-    return ASR_CATALOG.map((facts) => ({ ...facts, installed: facts.id === "sensevoice" }));
+    return ASR_CATALOG.map((facts) => ({ ...facts, installed: facts.id === "whisper-fr" }));
   },
   async probeMedia() {
     await sleep(600);
@@ -784,12 +785,43 @@ export function isElectron(): boolean {
   return typeof window !== "undefined" && "hotclip" in window && window.hotclip !== undefined;
 }
 
+const localizedApis = new WeakMap<object, HotClipApi>();
+
+/** Un seul point de sortie pour les erreurs IPC/HTTP : aucun fragment bilingue brut dans l’UI française. */
+function withLocalizedErrors(api: HotClipApi): HotClipApi {
+  const cached = localizedApis.get(api);
+  if (cached) return cached;
+  const methods = new Map<PropertyKey, unknown>();
+  const proxy = new Proxy(api, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver) as unknown;
+      if (typeof value !== "function") return value;
+      if (methods.has(property)) return methods.get(property);
+      const wrapped = (...args: unknown[]): unknown => {
+        try {
+          const result = (value as (...values: unknown[]) => unknown).apply(target, args);
+          if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+            return Promise.resolve(result).catch((error) => { throw localizedError(error); });
+          }
+          return result;
+        } catch (error) {
+          throw localizedError(error);
+        }
+      };
+      methods.set(property, wrapped);
+      return wrapped;
+    },
+  });
+  localizedApis.set(api, proxy);
+  return proxy;
+}
+
 export function getApi(): HotClipApi {
   if (isElectron()) {
-    return window.hotclip as HotClipApi;
+    return withLocalizedErrors(window.hotclip as HotClipApi);
   }
   if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "1") {
-    return browserMock;
+    return withLocalizedErrors(browserMock);
   }
-  return httpApi;
+  return withLocalizedErrors(httpApi);
 }

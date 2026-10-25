@@ -42,16 +42,16 @@ describe("runDoctor", () => {
 
     // 默认管线五个核心模型都缺
     expect(report.missingCoreModels.map((a) => a.id)).toEqual([
-      "sensevoice-2024-07-17",
+      "whisper-base-multilingual",
       "yunet-2023mar",
       "emotion-ferplus-8",
       "transnetv2-onnx",
       "silero-vad-v6",
     ]);
-    const sv = report.checks.find((c) => c.name.includes("SenseVoice"));
-    expect(sv?.status).toBe("warn");
-    expect(sv?.detail).toContain("未安装");
-    expect(sv?.fix).toContain("预下载");
+    const whisper = report.checks.find((c) => c.name.includes("Whisper"));
+    expect(whisper?.status).toBe("warn");
+    expect(whisper?.detail).toContain("未安装");
+    expect(whisper?.fix).toContain("预下载");
 
     // 可选模型缺失不告警
     const fireRed = report.checks.find((c) => c.name.includes("FireRed"));
@@ -128,6 +128,20 @@ describe("runDoctor", () => {
     expect(report.checks.find((c) => c.id === "cache")?.detail).toContain("Empty");
   });
 
+  it("rapport français complet, y compris sans option zh explicite", async () => {
+    const { modelsRoot, cacheDir } = await freshRoot();
+    const report = await runDoctor({ modelsRoot, cacheDir, llm: null, fr: true, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((c) => c.id === "model:whisper-base-multilingual")).toMatchObject({
+      name: "Transcription française Whisper (défaut)",
+      detail: expect.stringContaining("Non installé"),
+    });
+    expect(report.checks.find((c) => c.id === "llm")?.name).toBe("Configuration IA");
+    expect(report.checks.find((c) => c.id === "cache")?.detail).toContain("Vide");
+    for (const check of report.checks) {
+      expect(`${check.name} ${check.detail} ${check.fix ?? ""}`).not.toMatch(/[㐀-鿿]/);
+    }
+  });
+
   it("可选渲染缓存检查显示占用并支持英文报告", async () => {
     const { modelsRoot, cacheDir } = await freshRoot();
     const renderCacheDir = join(root, "render-cache");
@@ -183,5 +197,22 @@ describe("runDoctor", () => {
     const check = report.checks.find((c) => c.name === "LLM 端点");
     expect(check?.status).toBe("warn");
     expect(check?.detail).toContain("连不上");
+  });
+
+  it("moteur intégré : prêt, en français, sans requête réseau", async () => {
+    const { modelsRoot, cacheDir } = await freshRoot();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const report = await runDoctor({
+      modelsRoot,
+      cacheDir,
+      llm: { baseUrl: "builtin://local-free", apiKey: "", model: "regles-locales", provider: "builtin" },
+      zh: false,
+      fr: true,
+      resolveBinaries: fakeBins,
+      probeBinaryVersion: fakeProbe,
+    });
+    expect(report.checks.find((check) => check.id === "llm")).toMatchObject({ status: "ok", name: "Moteur gratuit intégré" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

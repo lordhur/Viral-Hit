@@ -72,6 +72,10 @@ export interface SherpaEngineSpec {
   buildModelConfig(dir: string): Record<string, unknown>;
   /** Fixed language, or a reader that pulls it from the first decode result. */
   language: string | ((result: SherpaResult) => string | undefined);
+  /** Token filename when the archive does not use the generic tokens.txt. */
+  tokensFile?: string;
+  /** Engine-specific conversion, notably Whisper's untimed French text. */
+  mapWords?: (result: SherpaResult, startSec: number, endSec: number) => TranscriptWord[];
   /** Restore punctuation via CT-Transformer (models that emit none). */
   punctuate?: boolean;
   numThreads?: number;
@@ -116,7 +120,7 @@ export class SherpaOfflineEngine implements TranscribeEngine {
       featConfig: { sampleRate: 16000, featureDim: 80 },
       modelConfig: {
         ...spec.buildModelConfig(dir),
-        tokens: join(dir, "tokens.txt"),
+        tokens: join(dir, spec.tokensFile ?? "tokens.txt"),
         numThreads: spec.numThreads ?? 2,
         provider: "cpu",
         debug: 0,
@@ -142,7 +146,7 @@ export class SherpaOfflineEngine implements TranscribeEngine {
           stream.acceptWaveform({ sampleRate: 16000, samples });
           recognizer.decode(stream);
           const result = recognizer.getResult(stream) as SherpaResult;
-          let words = tokensToWords(result, startSec, endSec);
+          let words = spec.mapWords ? spec.mapWords(result, startSec, endSec) : tokensToWords(result, startSec, endSec);
           if (punct && words.length > 0) words = applyPunctuation(words, punct.addPunct(joinWords(words)) as string);
           return { words, language: typeof spec.language === "string" ? spec.language : spec.language(result) };
         } finally {

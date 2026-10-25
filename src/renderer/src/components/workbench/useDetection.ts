@@ -8,7 +8,7 @@ import { getApi } from "../../api/provider";
 import { useSession } from "../../stores/session-store";
 import { useLlmStore } from "../../stores/llm-store";
 import { useRenderPrefs } from "../../stores/render-prefs-store";
-import { stripIpcError } from "../../../../shared/transcribe-errors";
+import { errorText } from "../../i18n/errors";
 
 export function useDetection(): { run: () => Promise<void> } {
   const { config, prefilter, vision } = useLlmStore();
@@ -28,7 +28,7 @@ export function useDetection(): { run: () => Promise<void> } {
         s.file?.path,
         s.diarize,
         prefilter.enabled ? { baseUrl: prefilter.baseUrl, model: prefilter.model } : null,
-        vision.enabled ? { baseUrl: vision.baseUrl, model: vision.model, apiKey: vision.apiKey || undefined } : null,
+        vision.enabled ? { baseUrl: vision.baseUrl, model: vision.model } : null,
         prefs.clipLength,
         prefs.products,
         s.referencePath,
@@ -54,8 +54,8 @@ export function useDetection(): { run: () => Promise<void> } {
       if (result.transcript) st.setTranscript(result.transcript);
       st.markParamsDirty(false);
     } catch (e) {
-      // IPC 包装串只会淹没真正有用的那句话——先剥壳再展示(issue #6)
-      useSession.getState().setDetectError(stripIpcError(e instanceof Error ? e.message : String(e)));
+      // Une seule localisation à la frontière UI : aucun diagnostic bilingue brut.
+      useSession.getState().setDetectError(errorText(e));
     } finally {
       useSession.getState().setDetecting(false);
     }

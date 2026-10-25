@@ -21,6 +21,7 @@ import {
   LuX,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
+import { errorText } from "../i18n/errors";
 import { getApi } from "../api/provider";
 import { useAsrStore } from "../stores/asr-store";
 import { editSegmentText } from "../../../shared/edit-transcript";
@@ -51,6 +52,7 @@ const STAGE_KEY: Record<TranscribeProgressEvent["stage"], string> = {
 
 /** catalog id → i18n name/desc keys (unknown ids fall back to raw id). */
 const ENGINE_TEXT: Record<string, { name: string; desc: string }> = {
+  "whisper-fr": { name: "engineWhisperFrName", desc: "engineWhisperFrDesc" },
   sensevoice: { name: "engineSensevoiceName", desc: "engineSensevoiceDesc" },
   paraformer: { name: "engineParaformerName", desc: "engineParaformerDesc" },
   qwen3: { name: "engineQwenName", desc: "engineQwenDesc" },
@@ -84,7 +86,7 @@ export function TranscribeView({
   autoStart?: boolean;
 }): React.JSX.Element {
   const t = useT("transcribe");
-  const { engineId, setEngineId, keys, setKey, localServiceUrl } = useAsrStore();
+  const { engineId, setEngineId, localServiceUrl } = useAsrStore();
   const [engines, setEngines] = useState<AsrEngineInfo[] | null>(null);
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -171,7 +173,7 @@ export function TranscribeView({
     const api = getApi();
     unsubRef.current = api.onTranscribeProgress(setProgress);
     api
-      .transcribeMedia(filePath, engineId, keys[engineId], { localServiceUrl, restart })
+      .transcribeMedia(filePath, engineId, "", { localServiceUrl, restart })
       .then((result) => {
         if (request !== generation.current) return;
         setTranscript(result);
@@ -190,9 +192,11 @@ export function TranscribeView({
               ? "failedModelDownload"
               : kind === "model-load"
                 ? "failedModelLoad"
-                : "failed";
+                : kind === "local-service"
+                  ? "failedLocalService"
+                  : "failed";
         setError(t(msgKey));
-        setErrorDetail(kind !== "no-audio" && detail ? detail : null);
+        setErrorDetail(kind !== "no-audio" && kind !== "local-service" && detail ? errorText(detail) : null);
       })
       .finally(() => {
         if (request !== generation.current) return;
@@ -230,7 +234,7 @@ export function TranscribeView({
           }} />
 
           <div className="mt-8 grid w-full gap-3">
-            {(engines ?? []).map((e) => {
+            {(engines ?? []).filter((e) => e.kind !== "cloud").map((e) => {
               const text = ENGINE_TEXT[e.id];
               const active = engineId === e.id;
               return (
@@ -257,16 +261,6 @@ export function TranscribeView({
                     </span>
                   </div>
                   {text && <p className="mt-1 text-[12.5px] text-mut">{t(text.desc)}</p>}
-                  {active && e.kind === "cloud" && (
-                    <input
-                      type="password"
-                      value={keys[e.id] ?? ""}
-                      onChange={(ev) => setKey(e.id, ev.target.value)}
-                      onClick={(ev) => ev.stopPropagation()}
-                      placeholder={t("cloudKeyPlaceholder")}
-                      className="mt-3 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[12px] outline-none focus:border-ember/60"
-                    />
-                  )}
                   <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10.5px]">
                     <span className="chip flex items-center gap-1 rounded-md px-2 py-0.5">
                       {e.uploads ? <LuCloudUpload className="h-3 w-3" /> : <LuShieldCheck className="h-3 w-3 text-emerald-400" />}
@@ -305,7 +299,7 @@ export function TranscribeView({
             <button
               type="button"
               onClick={() => start()}
-              disabled={importing || (engines?.find((e) => e.id === engineId)?.kind === "cloud" && !keys[engineId])}
+              disabled={importing}
               className="btn-flame rounded-xl px-9 py-3 text-[14px] font-bold text-white disabled:opacity-40"
             >
               {t(paused && engineId !== "elevenlabs" ? "speechResume" : "engineStart")}

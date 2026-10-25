@@ -21,6 +21,7 @@ import {
   LuX,
 } from "react-icons/lu";
 import { useT, useLocaleStore } from "./i18n/store";
+import { errorText } from "./i18n/errors";
 import { LOCALE_LIST, REGISTRY } from "./i18n/messages";
 import { getApi } from "./api/provider";
 import { initialSessionCheckpoint, sessionCheckpointFromState, useSession, type ProbedFile } from "./stores/session-store";
@@ -121,7 +122,7 @@ function ImportStage({ onImportFile }: { onImportFile: (file: ProbedFile) => Pro
       if (!path) return;
       await probePath(path);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("probeFailed"));
+      setError(errorText(reason, t("probeFailed")));
     }
   }, [probePath, t]);
 
@@ -135,7 +136,7 @@ function ImportStage({ onImportFile }: { onImportFile: (file: ProbedFile) => Pro
       await probePath(result.filePath);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (!/AbortError|Aborted/i.test(message)) setError(t("urlFailed"));
+      if (!/AbortError|Aborted/i.test(message)) setError(errorText(e, t("urlFailed")));
     } finally {
       setUrlBusy(false);
       setUrlProgress(null);

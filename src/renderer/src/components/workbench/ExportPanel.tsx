@@ -13,6 +13,12 @@ import { PLATFORM_SPECS } from "../../../../shared/platform-specs";
 import { ModalShell, SectionLabel, Segmented, SwitchRow } from "../ui";
 import type { CaptionStyleChoice } from "../../../../shared/api-types";
 
+const SCHEME_FR: Record<string, string> = {
+  default: "Export par défaut",
+  selling: "Pack vente complet",
+  minimal: "Minimal et rapide",
+};
+
 const CAPTION_ORDER: CaptionStyleChoice[] = ["keyword", "pop", "bubble", "hormozi", "minimal", "karaoke", "none"];
 const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
   none: "captionNone",
@@ -49,6 +55,7 @@ export function ExportPanel({
   const ts = useT("settings");
   const lang = useLocaleStore((s) => s.locale);
   const { config } = useLlmStore();
+  const aiReady = config.provider === "ollama";
   const { prefs, setPref } = useRenderPrefs();
   const { userSchemes, saveCurrent, remove } = useSchemes();
   const [schemeName, setSchemeName] = useState("");
@@ -74,7 +81,7 @@ export function ExportPanel({
         <div className="flex shrink-0 items-center gap-3">
           <h2 className="text-[15px] font-extrabold">{t("exportPanelTitle")}</h2>
           <p className="min-w-0 flex-1 truncate text-[11px] text-mut">{t("exportPanelDesc")}</p>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-mut transition-colors hover:text-fg" aria-label="close">
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-mut transition-colors hover:text-fg" aria-label="Fermer">
             <LuX className="h-4.5 w-4.5" />
           </button>
         </div>
@@ -90,7 +97,7 @@ export function ExportPanel({
                   activeScheme?.id === s.id ? "border-ember/70 bg-ember/12 text-ember" : "border-line text-mut hover:border-mut hover:text-fg"
                 }`}
               >
-                {s.name}
+                {lang === "fr" && s.builtin ? SCHEME_FR[s.id] ?? s.name : s.name}
               </button>
               {!s.builtin && (
                 <button
@@ -258,13 +265,13 @@ export function ExportPanel({
               disabled={!diarize}
               onToggle={() => setPref({ speakerLabels: !prefs.speakerLabels })}
             />
-            <SwitchRow label={th("optTranslateEn")} hint={th("optTranslateHint")} on={prefs.translate} onToggle={() => setPref({ translate: !prefs.translate })} />
+            <SwitchRow label={th("optTranslateEn")} hint={th("optTranslateHint")} on={prefs.translate} disabled={!aiReady} onToggle={() => setPref({ translate: !prefs.translate })} />
             <SwitchRow label={th("optSrt")} hint={th("optSrtHint")} on={prefs.subtitleFile} onToggle={() => setPref({ subtitleFile: !prefs.subtitleFile })} />
           </Group>
 
           <Group title={t("groupPublish")}>
-            <SwitchRow label={th("optPublish")} hint={th("optPublishHint")} on={prefs.publishCopy} onToggle={() => setPref({ publishCopy: !prefs.publishCopy })} />
-            <div className="flex min-h-7.5 items-center gap-2.5" title={th("optAiCoverHint")}>
+            <SwitchRow label={th("optPublish")} hint={th("optPublishHint")} on={prefs.publishCopy} disabled={!aiReady} onToggle={() => setPref({ publishCopy: !prefs.publishCopy })} />
+            {atlasReady && <div className="flex min-h-7.5 items-center gap-2.5" title={th("optAiCoverHint")}>
               <span className={`min-w-0 flex-1 truncate text-[12.5px] ${atlasReady ? "text-fg/90" : "text-mut/60"}`}>{t("coverLabel")}</span>
               <Segmented<string>
                 value={prefs.aiCover}
@@ -276,7 +283,7 @@ export function ExportPanel({
                 ]}
                 onChange={(v) => setPref({ aiCover: v as typeof prefs.aiCover })}
               />
-            </div>
+            </div>}
             <SwitchRow label={th("optAigc")} hint={th("optAigcHint")} on={prefs.aigcLabel} onToggle={() => setPref({ aigcLabel: !prefs.aigcLabel })} />
             <SwitchRow label={th("optEvidence")} hint={th("optEvidenceHint")} on={prefs.evidencePack} onToggle={() => setPref({ evidencePack: !prefs.evidencePack })} />
             <SwitchRow label={th("optJianying")} hint={th("optJianyingHint")} on={prefs.jianyingDraft} onToggle={() => setPref({ jianyingDraft: !prefs.jianyingDraft })} />
@@ -289,6 +296,7 @@ export function ExportPanel({
               <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg/90">{t("variantsLabel")}</span>
               <Segmented<number>
                 value={prefs.variants}
+                disabled={!aiReady}
                 options={[
                   { value: 1, label: "1" },
                   { value: 2, label: "2" },
@@ -309,7 +317,6 @@ export function ExportPanel({
                     <button
                       key={p.id}
                       type="button"
-                      title={p.noteZh}
                       onClick={() =>
                         setPref({ packPlatforms: on ? prefs.packPlatforms.filter((x) => x !== p.id) : [...prefs.packPlatforms, p.id] })
                       }

@@ -42,18 +42,21 @@ export function clipOutDir(chosen: string | null | undefined, videosDir: string,
 export function llmFromEnv(): LlmConfig {
   const baseUrl = process.env.VIRALHIT_LLM_BASE_URL || process.env.HOTCLIP_LLM_BASE_URL || "";
   const model = process.env.VIRALHIT_LLM_MODEL || process.env.HOTCLIP_LLM_MODEL || "";
-  const rawProvider = process.env.VIRALHIT_LLM_PROVIDER || "openai-compatible";
-  const allowed = ["openai-compatible", "openai", "anthropic", "gemini", "mimo", "ollama"] as const;
+  const rawProvider = process.env.VIRALHIT_LLM_PROVIDER || "builtin";
+  const allowed = ["builtin", "openai-compatible", "openai", "anthropic", "gemini", "mimo", "ollama"] as const;
   const provider = allowed.find((item) => item === rawProvider);
-  if (!provider) throw new Error(`Unsupported VIRALHIT_LLM_PROVIDER: ${rawProvider}`);
+  if (!provider) throw new Error(`Fournisseur IA non pris en charge : ${rawProvider}`);
+  if (provider === "builtin") {
+    return { baseUrl: "builtin://local-free", apiKey: "", model: "regles-locales", provider };
+  }
   if (!baseUrl || !model) {
     throw new Error(
-      "Missing LLM configuration: set VIRALHIT_LLM_BASE_URL and VIRALHIT_LLM_MODEL (HOTCLIP_LLM_* remains supported for legacy setups)."
+      "Configuration IA locale incomplète. Laissez VIRALHIT_LLM_PROVIDER=builtin pour le mode gratuit, ou choisissez ollama et renseignez VIRALHIT_LLM_BASE_URL et VIRALHIT_LLM_MODEL."
     );
   }
   return {
     baseUrl,
-    apiKey: process.env.VIRALHIT_LLM_API_KEY ?? process.env.HOTCLIP_LLM_API_KEY ?? (provider === "ollama" ? "ollama" : ""),
+    apiKey: process.env.VIRALHIT_LLM_API_KEY ?? process.env.HOTCLIP_LLM_API_KEY ?? "",
     model,
     provider,
   };

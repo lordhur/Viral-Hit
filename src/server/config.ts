@@ -13,8 +13,8 @@ export function loadLocalEnv(root = process.cwd()): void {
     for (const [key, value] of Object.entries(values)) {
       if (process.env[key] === undefined) process.env[key] = value;
     }
-  } catch (error) {
-    throw new Error(`Cannot parse .env: ${error instanceof Error ? error.message : String(error)}`);
+  } catch {
+    throw new Error("Impossible de lire le fichier .env. Vérifiez sa syntaxe CLÉ=VALEUR.");
   }
 }
 
@@ -41,11 +41,11 @@ export function isPathInside(root: string, candidate: string, paths: PathSemanti
 }
 
 export function assertInside(root: string, candidate: string): string {
-  if (!isAbsolute(candidate)) throw new Error("An absolute local path is required");
+  if (!isAbsolute(candidate)) throw new Error("Un chemin local absolu est requis");
   const normalizedRoot = resolve(root);
   const normalized = resolve(candidate);
   if (!isPathInside(normalizedRoot, normalized)) {
-    throw new Error("This browser session only accesses files inside the Viral Hit data directory");
+    throw new Error("Cette session navigateur accède uniquement aux fichiers du dossier de données Viral Hit");
   }
   return normalized;
 }

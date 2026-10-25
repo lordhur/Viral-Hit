@@ -24,6 +24,7 @@ import { resolveSelection, type RawSelection, type RawPart } from "./match";
 import { prefilterTranscript } from "./prefilter";
 import { detectClipCommands } from "./commands";
 import { applyRuleGate, type GateTier } from "./gate";
+import { detectLocalFree } from "./local-free";
 import { utilityDensity, utilityBoost, UTILITY_SAVE_WORTHY } from "../../shared/utility-density";
 import { clipDurationSec, MAX_PIECES, type ClipPiece } from "../../shared/pieces";
 import { isLocalBaseUrl } from "../../shared/llm-preflight";
@@ -82,6 +83,14 @@ interface ChatAttempt {
   finishReason: string;
 }
 
+/** Message français pour l’utilisateur, détail technique réservé aux décisions de retry. */
+class LlmHttpError extends Error {
+  constructor(message: string, readonly status: number, readonly detail: string) {
+    super(message);
+    this.name = "LlmHttpError";
+  }
+}
+
 /** 发一次 OpenAI 兼容请求。网络/HTTP/解析错误都带可执行的指引。 */
 async function chatAttempt(
   llm: LlmConfig,
@@ -123,31 +132,31 @@ async function chatAttempt(
   } catch (e) {
     signal?.throwIfAborted();
     if (e instanceof LlmTransportError) throw e;
-    // 连不上最常见的场景是「选了本地 Ollama 但没装/没启动」(issue #6)——
-    // 报错必须告诉用户下一步做什么,一句 fetch failed 只会把人留在原地
     const hint = isLocalBaseUrl(llm.baseUrl)
-      ? "本机 LLM 服务没有响应:若用 Ollama,请先到 ollama.com 安装并启动,再运行 ollama pull 拉取模型;或点「连接 AI 模型」换云端供应商,填 API Key 即用。/ Local LLM not responding: install & start Ollama (ollama.com) and pull the model, or switch to a cloud provider with an API key."
-      : "请检查网络连接,并确认 Base URL 填写正确。/ Check your network and verify the Base URL.";
-    throw new Error(`无法连接 LLM 服务 / cannot reach LLM endpoint\n${hint}`);
+      ? "Le service IA local ne répond pas. Installez et démarrez Ollama depuis ollama.com, puis lancez « ollama pull " + llm.model + " ». Vous pouvez aussi choisir le moteur gratuit intégré, qui ne demande aucune installation."
+      : "Vérifiez votre connexion et l’adresse du service IA. Pour éviter tout service payant, choisissez le moteur gratuit intégré dans les réglages.";
+    throw new Error(`Impossible de joindre le service IA.\n${hint}`);
   }
   const text = res.text;
   if (!res.ok) {
-    // Ollama 在跑但模型没拉:404 补一句拉取命令,免得用户以为软件坏了
     const retryWait = retryAfterMs(res.headers.get("retry-after"));
-    const hint = isLocalBaseUrl(llm.baseUrl) && res.status === 404
-      ? `\n本机可能还没拉取这个模型:先运行 ollama pull ${llm.model} / model likely not pulled yet: run ollama pull ${llm.model}`
-      : res.status === 429 || res.status === 503
-        ? retryWait !== null && retryWait > 0
-          ? `\n服务商建议等待 ${Math.ceil(retryWait / 1000)} 秒后重试。/ Retry after ${Math.ceil(retryWait / 1000)} seconds.`
-          : "\n服务暂时不可用或额度受限，请稍后重试并检查服务状态与额度。/ Check service availability and quota, then retry later."
-        : "";
-    throw new Error(`LLM 请求失败 / LLM request failed (HTTP ${res.status}): ${modelErrorDetail(text, llm.apiKey)}${hint}`);
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`Le service IA a refusé l’authentification (HTTP ${res.status}). Aucun jeton n’est nécessaire avec le moteur gratuit intégré ; sélectionnez-le dans les réglages ou vérifiez votre serveur IA local.`);
+    }
+    if (isLocalBaseUrl(llm.baseUrl) && res.status === 404) {
+      throw new Error(`Le modèle local « ${llm.model} » est introuvable. Lancez « ollama pull ${llm.model} », puis réessayez.`);
+    }
+    if (res.status === 429 || res.status === 503) {
+      const wait = retryWait !== null && retryWait > 0 ? ` Patientez environ ${Math.ceil(retryWait / 1000)} secondes avant de réessayer.` : " Réessayez plus tard ou utilisez le moteur gratuit intégré.";
+      throw new Error(`Le service IA est temporairement indisponible (HTTP ${res.status}).${wait}`);
+    }
+    throw new LlmHttpError(`Le service IA a renvoyé une erreur HTTP ${res.status}. Vérifiez sa configuration ou utilisez le moteur gratuit intégré.`, res.status, modelErrorDetail(text, llm.apiKey));
   }
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new Error("LLM 返回非 JSON 响应，请检查 Base URL。/ Non-JSON response; check the Base URL.");
+    throw new Error("Le service IA a renvoyé une réponse illisible. Vérifiez son adresse ou utilisez le moteur gratuit intégré.");
   }
   if (provider === "anthropic") {
     const data = raw as { content?: Array<{ type?: string; text?: unknown; thinking?: unknown }>; stop_reason?: string };
@@ -217,7 +226,9 @@ export async function chatComplete(llm: LlmConfig, system: string, user: string,
     // A strict OpenAI-compatible gateway may reject the provider-specific
     // switch. Retry once without it; ordinary HTTP/auth failures still throw.
     const message = e instanceof Error ? e.message : String(e);
-    if (!includeThinkingParam || !/HTTP 400/i.test(message) || !/thinking|unknown parameter|unsupported/i.test(message)) throw e;
+    const status = e instanceof LlmHttpError ? e.status : /HTTP 400/i.test(message) ? 400 : 0;
+    const detail = e instanceof LlmHttpError ? e.detail : message;
+    if (!includeThinkingParam || status !== 400 || !/thinking|unknown parameter|unsupported/i.test(detail)) throw e;
     includeThinkingParam = false;
     first = await chatAttempt(llm, system, user, signal, MAX_TOKENS, budget, false);
   }
@@ -242,11 +253,11 @@ export async function chatComplete(llm: LlmConfig, system: string, user: string,
     first.finishReason === "length" ||
     retry?.finishReason === "length";
   const hint = filtered
-    ? "内容被服务商的安全审查拦截了,请换一家供应商或换一段素材。/ Blocked by the provider's content filter — try another provider or different footage."
+    ? "Le filtre de sécurité du service a bloqué cette analyse. Essayez un autre extrait ou le moteur gratuit intégré."
     : thinking
-      ? "当前模型是「深度思考」模型,思考过程就把输出预算烧完了。请在模型列表换它的非思考版本(通常带 instruct/chat 字样,或平台上可关闭深度思考),或换常规对话模型。/ This is a reasoning model that spends the whole output budget thinking — switch to its non-thinking variant (usually named instruct/chat) or a regular chat model."
-      : "服务商返回了空内容,可点重试;若持续出现请换个模型。/ The provider returned empty content — retry, or switch models if it persists.";
-  throw new Error(`LLM 未返回内容 / empty LLM response\n${hint}`);
+      ? "Ce modèle de raisonnement a consommé toute sa capacité sans produire de réponse. Choisissez une variante de dialogue non raisonnante ou le moteur gratuit intégré."
+      : "Réessayez ; si le problème persiste, changez de modèle ou utilisez le moteur gratuit intégré.";
+  throw new Error(`Le service IA n’a renvoyé aucun contenu exploitable.\n${hint}`);
 }
 
 /** 要 JSON 的调用最多试几次(1 次重试)。 */
@@ -313,10 +324,10 @@ export function parseSelections(content: string): RawSelection[] {
   try {
     parsed = JSON.parse(extractJson(content));
   } catch {
-    throw new Error(`LLM 返回的内容不是合法 JSON / invalid JSON: ${content.slice(0, 200)}`);
+    throw new Error("Le service IA a renvoyé une sélection illisible. Réessayez ou utilisez le moteur gratuit intégré.");
   }
   const clips = (parsed as { clips?: unknown[] })?.clips;
-  if (!Array.isArray(clips)) throw new Error("LLM 输出缺少 clips 数组 / missing clips array");
+  if (!Array.isArray(clips)) throw new Error("La réponse du service IA ne contient aucune liste de clips.");
   const out: RawSelection[] = [];
   for (const c of clips) {
     if (typeof c !== "object" || c === null) continue;
@@ -360,10 +371,10 @@ export function parseMomentPicks(content: string): RawMomentPick[] {
   try {
     parsed = JSON.parse(extractJson(content));
   } catch {
-    throw new Error(`LLM 返回的内容不是合法 JSON / invalid JSON: ${content.slice(0, 200)}`);
+    throw new Error("Le service IA a renvoyé une sélection illisible. Réessayez ou utilisez le moteur gratuit intégré.");
   }
   const clips = (parsed as { clips?: unknown[] })?.clips;
-  if (!Array.isArray(clips)) throw new Error("LLM 输出缺少 clips 数组 / missing clips array");
+  if (!Array.isArray(clips)) throw new Error("La réponse du service IA ne contient aucune liste de clips.");
   const out: RawMomentPick[] = [];
   for (const c of clips) {
     if (typeof c !== "object" || c === null) continue;
@@ -462,10 +473,10 @@ export function parseReviews(content: string): ReviewVerdict[] {
   try {
     parsed = JSON.parse(extractJson(content));
   } catch {
-    throw new Error(`reviewer returned invalid JSON: ${content.slice(0, 200)}`);
+    throw new Error("Le service IA a renvoyé une révision illisible. La sélection initiale sera conservée.");
   }
   const reviews = (parsed as { reviews?: unknown[] })?.reviews;
-  if (!Array.isArray(reviews)) throw new Error("reviewer output missing reviews array");
+  if (!Array.isArray(reviews)) throw new Error("La réponse du service IA ne contient aucune liste de révisions.");
   const out: ReviewVerdict[] = [];
   for (const r of reviews) {
     if (typeof r !== "object" || r === null) continue;
@@ -616,6 +627,18 @@ export async function detectHighlights(
   const commandMarks = detectClipCommands(transcript);
   if (commandMarks.length > 0) {
     signals = { loudPeaks: [], cutDense: [], ...signals, clipCommandMarks: commandMarks };
+  }
+
+  // Parcours gratuit par défaut : aucun appel LLM, préfiltre ou révision cloud.
+  // Les candidats restent des extraits réels de la transcription ou des fenêtres
+  // données par les signaux locaux ; aucun jeton n'est demandé ni simulé.
+  if (llm.provider === "builtin") {
+    const evidence: EvidenceClass = genrePreset(normalizeGenreId(genre?.id)).evidence;
+    const ranked = dropOverlaps(detectLocalFree(transcript, {
+      length, products, signals, evidence, brief,
+    })).sort((a, b) => b.score - a.score).slice(0, 8);
+    const kept = dropOverlaps(ranked);
+    return { candidates: applyRuleGate(transcript, normalizeScores(kept), false, "fr") };
   }
 
   // 两级漏斗第一级:本地小模型圈入围区间,云端只精读入围部分。

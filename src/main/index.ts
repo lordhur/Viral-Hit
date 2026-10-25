@@ -20,13 +20,14 @@ import { probeMedia } from "@core/probe";
 import { planColorRender } from "@core/color";
 import { analysisVideoIdentity, type AnalysisVideoOptions } from "@core/analysis-video";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
+import { WhisperFrenchEngine } from "@core/transcribe/whisper";
 import { ParaformerEngine } from "@core/transcribe/paraformer";
 import { FireRedEngine } from "@core/transcribe/firered";
 import { ElevenLabsEngine } from "@core/transcribe/elevenlabs";
 import { readTranscriptCache, writeTranscriptCache } from "@core/transcribe/cache";
 import { importSubtitleText } from "@core/subtitle-import";
 import { validateSubtitleInput } from "../shared/subtitle-import";
-import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRERED_MODEL, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "@core/models";
+import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, WHISPER_FR_MODEL, PARAFORMER_MODEL, FIRERED_MODEL, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "@core/models";
 import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights, chatComplete } from "@core/highlight/detect";
@@ -80,6 +81,7 @@ import { clearEvidenceIndex, evidenceSourceId, fingerprintEvidenceSource } from 
 import { collectSignalsEvidence, collectVisionEvidence } from "@core/media-evidence";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
+import { localizeErrorMessage, localizeUrlImportError } from "../shared/french-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
 import type { ReferenceProfile } from "@core/reference";
 import { exportClips, sanitizeFilename } from "@core/export";
@@ -167,12 +169,12 @@ async function serveMedia(request: Request): Promise<Response> {
   const slash = pathname.indexOf("/");
   const encodedPath = slash === -1 ? pathname : pathname.slice(slash + 1);
   const filePath = decodeURIComponent(encodedPath);
-  if (!allowedMedia.has(filePath)) return new Response("forbidden", { status: 403 });
+  if (!allowedMedia.has(filePath)) return new Response("accès refusé", { status: 403 });
   let size: number;
   try {
     size = (await stat(filePath)).size;
   } catch {
-    return new Response("not found", { status: 404 });
+    return new Response("média introuvable", { status: 404 });
   }
   const range = resolveByteRange(request.headers.get("range"), size);
   if (!range) {
@@ -239,8 +241,8 @@ ipcMain.handle("hotclip:select-media", async () => {
   const result = await dialog.showOpenDialog({
     properties: ["openFile"],
     filters: [
-      { name: "Video / Audio", extensions: [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS] },
-      { name: "All Files", extensions: ["*"] },
+      { name: "Vidéo / Audio", extensions: [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS] },
+      { name: "Tous les fichiers", extensions: ["*"] },
     ],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
@@ -250,8 +252,8 @@ ipcMain.handle("hotclip:select-media", async () => {
 let urlImportAbort: AbortController | null = null;
 
 ipcMain.handle("hotclip:import-media-url", async (event, url: unknown) => {
-  if (typeof url !== "string") throw new Error("import-media-url requires a URL");
-  if (urlImportAbort) throw new Error("A URL import is already running");
+  if (typeof url !== "string") throw new Error("Une URL de vidéo est requise pour l’import");
+  if (urlImportAbort) throw new Error("Un autre import d’URL est déjà en cours");
   const controller = new AbortController();
   urlImportAbort = controller;
   try {
@@ -263,6 +265,9 @@ ipcMain.handle("hotclip:import-media-url", async (event, url: unknown) => {
         if (!event.sender.isDestroyed()) event.sender.send("hotclip:url-import-progress", progress);
       },
     });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+    throw new Error(localizeUrlImportError(error));
   } finally {
     if (urlImportAbort === controller) urlImportAbort = null;
   }
@@ -352,7 +357,7 @@ ipcMain.handle("hotclip:performance-import", async () => {
     properties: ["openFile"],
     filters: [
       { name: "Platform metrics", extensions: ["csv", "json"] },
-      { name: "All Files", extensions: ["*"] },
+      { name: "Tous les fichiers", extensions: ["*"] },
     ],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
@@ -365,7 +370,7 @@ ipcMain.handle("hotclip:performance-template", async () => {
   const pending = items.filter((item) => !item.metricsImportedAt);
   if (pending.length === 0) return null;
   const result = await dialog.showSaveDialog({
-    defaultPath: join(app.getPath("documents"), "Viral-Hit-表现数据回填.csv"),
+    defaultPath: join(app.getPath("documents"), "Viral-Hit-performances.csv"),
     filters: [{ name: "CSV", extensions: ["csv"] }],
   });
   if (result.canceled || !result.filePath) return null;
@@ -384,10 +389,10 @@ const diagnosticsConfig = (value: unknown): LlmConfig | null => {
   if (!value || typeof value !== "object") return null;
   const config = value as Partial<LlmConfig>;
   if (typeof config.baseUrl !== "string" || !config.baseUrl.trim() || typeof config.model !== "string" || !config.model.trim()) return null;
-  return { baseUrl: config.baseUrl.trim(), model: config.model.trim(), apiKey: typeof config.apiKey === "string" ? config.apiKey : "" };
+  return { baseUrl: config.baseUrl.trim(), model: config.model.trim(), apiKey: typeof config.apiKey === "string" ? config.apiKey : "", ...(config.provider ? { provider: config.provider } : {}) };
 };
 
-async function desktopDiagnostics(llm: LlmConfig | null, zh = true) {
+async function desktopDiagnostics(llm: LlmConfig | null, locale: unknown = "zh") {
   const report = await runDoctor({
     modelsRoot: modelsRoot(),
     cacheDir: transcriptCacheDir(),
@@ -395,27 +400,28 @@ async function desktopDiagnostics(llm: LlmConfig | null, zh = true) {
     evidenceCacheDir: baseEvidenceCacheDir(),
     toolsDir: join(app.getPath("userData"), "tools", "yt-dlp"),
     llm,
-    zh,
+    zh: locale === "zh",
+    fr: locale === "fr",
   });
   return { checks: report.checks, missingCoreModels: report.missingCoreModels.length, generatedAt: new Date().toISOString() };
 }
 
-ipcMain.handle("hotclip:diagnostics-run", (_event, llm: unknown, locale: unknown) => desktopDiagnostics(diagnosticsConfig(llm), locale !== "en"));
+ipcMain.handle("hotclip:diagnostics-run", (_event, llm: unknown, locale: unknown) => desktopDiagnostics(diagnosticsConfig(llm), locale));
 ipcMain.handle("hotclip:diagnostics-clear-render-cache", async (_event, llm: unknown, locale: unknown) => {
   await clearRenderCache(baseRenderCacheDir());
-  return desktopDiagnostics(diagnosticsConfig(llm), locale !== "en");
+  return desktopDiagnostics(diagnosticsConfig(llm), locale);
 });
 ipcMain.handle("hotclip:diagnostics-clear-evidence-index", async (_event, llm: unknown, locale: unknown) => {
   signalsCache.clear();
   timelineCache.clear();
   await clearEvidenceIndex(baseEvidenceCacheDir());
-  return desktopDiagnostics(diagnosticsConfig(llm), locale !== "en");
+  return desktopDiagnostics(diagnosticsConfig(llm), locale);
 });
 
 let diagnosticsRepairAbort: AbortController | null = null;
 ipcMain.on("hotclip:diagnostics-repair-cancel", () => diagnosticsRepairAbort?.abort());
 ipcMain.handle("hotclip:diagnostics-prepare-models", async (event, llm: unknown, locale: unknown) => {
-  if (diagnosticsRepairAbort) throw new Error("model preparation is already running");
+  if (diagnosticsRepairAbort) throw new Error("La préparation des modèles est déjà en cours");
   const config = diagnosticsConfig(llm);
   const before = await runDoctor({
     modelsRoot: modelsRoot(),
@@ -424,7 +430,8 @@ ipcMain.handle("hotclip:diagnostics-prepare-models", async (event, llm: unknown,
     evidenceCacheDir: baseEvidenceCacheDir(),
     toolsDir: join(app.getPath("userData"), "tools", "yt-dlp"),
     llm: config,
-    zh: locale !== "en",
+    zh: locale === "zh",
+    fr: locale === "fr",
   });
   const controller = new AbortController();
   diagnosticsRepairAbort = controller;
@@ -443,7 +450,7 @@ ipcMain.handle("hotclip:diagnostics-prepare-models", async (event, llm: unknown,
         }
       }, controller.signal);
     }
-    return await desktopDiagnostics(config, locale !== "en");
+    return await desktopDiagnostics(config, locale);
   } finally {
     diagnosticsRepairAbort = null;
   }
@@ -459,7 +466,7 @@ ipcMain.handle("hotclip:models-info", async () =>
 );
 
 ipcMain.handle("hotclip:models-move", async (_event, dir: unknown) => {
-  if (typeof dir !== "string" || !dir.trim()) throw new Error("move requires a directory");
+  if (typeof dir !== "string" || !dir.trim()) throw new Error("Le déplacement nécessite un dossier de destination");
   const userData = app.getPath("userData");
   const target = dir.trim();
   const landed = await moveModelsDir(modelsRoot(), target);
@@ -515,7 +522,7 @@ ipcMain.handle("hotclip:select-image", async () => {
 
 ipcMain.handle("hotclip:probe-media", async (_event, filePath: unknown) => {
   if (typeof filePath !== "string" || !filePath.trim()) {
-    throw new Error("probe-media requires a file path");
+    throw new Error("L’analyse du média nécessite un chemin de fichier");
   }
   const info = await probeMedia(filePath);
   allowedMedia.add(filePath); // probe 成功的文件才可被预览协议读取
@@ -525,10 +532,10 @@ ipcMain.handle("hotclip:probe-media", async (_event, filePath: unknown) => {
 // ---- IPC: 审阅台波形(上下文窗口的音频峰值) ----
 
 ipcMain.handle("hotclip:audio-peaks", async (_event, filePath: unknown, startSec: unknown, endSec: unknown) => {
-  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("audio-peaks requires a file path");
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("L’analyse des pics audio nécessite un chemin de fichier");
   const from = typeof startSec === "number" && Number.isFinite(startSec) ? Math.max(0, startSec) : 0;
   const to = typeof endSec === "number" && Number.isFinite(endSec) ? endSec : 0;
-  if (to <= from) throw new Error("audio-peaks requires a valid range");
+  if (to <= from) throw new Error("L’analyse des pics audio nécessite une plage valide");
   // 窗口封顶 10 分钟,防误传超大区间把内存打爆
   const info = await probeMedia(filePath).catch(() => null);
   const track = await extractPeaks(filePath, from, Math.min(to, from + 600), info?.audioStreamIndex);
@@ -542,9 +549,9 @@ ipcMain.handle("hotclip:audio-peaks", async (_event, filePath: unknown, startSec
 const timelineCache = new Map<string, Promise<import("../shared/api-types").TimelineData>>();
 
 ipcMain.handle("hotclip:timeline-data", async (_event, filePath: unknown, durationSec: unknown) => {
-  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("timeline-data requires a file path");
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("La frise nécessite un chemin de fichier");
   const dur = typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0;
-  if (dur <= 0) throw new Error("timeline-data requires a duration");
+  if (dur <= 0) throw new Error("La frise nécessite une durée");
   const media = await probeMedia(filePath).catch(() => null);
   const analysis: AnalysisVideoOptions = media?.hasVideo
     ? { videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) }
@@ -580,10 +587,10 @@ ipcMain.handle("hotclip:timeline-data", async (_event, filePath: unknown, durati
 // ---- IPC: 候选片段接触表(审阅台画面速览,复用 VLM 同款拼图) ----
 
 ipcMain.handle("hotclip:contact-sheet", async (_event, filePath: unknown, startSec: unknown, endSec: unknown) => {
-  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("contact-sheet requires a file path");
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("La planche-contact nécessite un chemin de fichier");
   const from = typeof startSec === "number" && Number.isFinite(startSec) ? Math.max(0, startSec) : 0;
   const to = typeof endSec === "number" && Number.isFinite(endSec) ? endSec : 0;
-  if (to <= from) throw new Error("contact-sheet requires a valid range");
+  if (to <= from) throw new Error("La planche-contact nécessite une plage valide");
   // 片内均匀取 9 帧,首尾各让出一点(边界帧常是转场半帧)
   const span = to - from;
   const pad = Math.min(0.3, span / 10);
@@ -606,7 +613,7 @@ ipcMain.handle("hotclip:contact-sheet", async (_event, filePath: unknown, startS
 
 ipcMain.handle("hotclip:llm-models", async (_event, baseUrl: unknown, apiKey: unknown, provider: unknown) => {
   if (typeof baseUrl !== "string" || !baseUrl.trim()) {
-    return { ids: [], error: "缺少 base_url / missing base_url" };
+    return { ids: [], error: "L’URL de base du service IA est manquante" };
   }
   return listModels(baseUrl.trim(), typeof apiKey === "string" ? apiKey : "", provider as LlmConfig["provider"]);
 });
@@ -653,6 +660,7 @@ const baseEvidenceCacheDir = (): string => join(app.getPath("userData"), "eviden
 
 /** catalog id → engine factory + its model asset (for install checks). */
 const ASR_ENGINES = {
+  "whisper-fr": { make: () => new WhisperFrenchEngine(modelsRoot()), asset: WHISPER_FR_MODEL },
   sensevoice: { make: () => new SenseVoiceEngine(modelsRoot()), asset: SENSEVOICE_MODEL },
   paraformer: { make: () => new ParaformerEngine(modelsRoot()), asset: PARAFORMER_MODEL },
   fireredasr: { make: () => new FireRedEngine(modelsRoot()), asset: FIRERED_MODEL },
@@ -676,8 +684,8 @@ ipcMain.on("hotclip:transcribe-cancel", () => transcriptionAbort?.abort());
 ipcMain.on("hotclip:alignment-cancel", () => alignmentAbort?.abort());
 ipcMain.handle("hotclip:local-speech-check", (_event, url: string) => qwenHealth(url));
 ipcMain.handle("hotclip:alignment-preview", async (_event, filePath: string, transcript: Transcript, request: AlignmentRequest) => {
-  if (alignmentAbort || transcribing) throw new Error("speech:busy");
-  if (typeof filePath !== "string" || !filePath) throw new Error("alignment:source-required");
+  if (alignmentAbort || transcribing) throw new Error("Une transcription ou un alignement est déjà en cours");
+  if (typeof filePath !== "string" || !filePath) throw new Error("Une source est requise pour l’alignement");
   const abort = new AbortController();
   alignmentAbort = abort;
   try { return await runSpeechWorker<AlignmentPreview>({ kind: "align", filePath, transcript, request, modelsRoot: modelsRoot() }, abort.signal); }
@@ -719,16 +727,16 @@ async function warmSignals(
 }
 
 ipcMain.handle("hotclip:import-subtitle", async (_event, filePath: unknown, text: unknown, format: unknown) => {
-  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("subtitle import requires a source path");
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("L’import de sous-titres nécessite un chemin source");
   validateSubtitleInput(text, format);
   return importSubtitleText(filePath, text, format as "srt" | "vtt");
 });
 
 ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: unknown, apiKey: unknown, options: SpeechRunOptions = {}) => {
   if (typeof filePath !== "string" || !filePath.trim()) {
-    throw new Error("transcribe requires a file path");
+    throw new Error("La transcription nécessite un chemin de fichier");
   }
-  if (transcribing || alignmentAbort) throw new Error("another speech operation is already running");
+  if (transcribing || alignmentAbort) throw new Error("Une autre opération vocale est déjà en cours");
   transcribing = true;
   const abort = new AbortController();
   transcriptionAbort = abort;
@@ -739,7 +747,7 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
         ? engineId
         : typeof engineId === "string" && engineId in ASR_ENGINES
           ? engineId
-          : "sensevoice";
+          : "whisper-fr";
     // Persistent cache: same file (size+mtime) + same engine → skip the slowest
     // step entirely. Stat may fail (unusual paths) — then we just transcribe.
     let fileStat: { size: number; mtimeMs: number } | undefined;
@@ -790,8 +798,8 @@ ipcMain.handle(
   async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown, referencePath: unknown, genre: unknown, brief: unknown, scan: unknown) => {
     let t = transcript as Transcript;
     const config = llm as LlmConfig;
-    if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
-    if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+    if (!t || !Array.isArray(t.segments)) throw new Error("La détection des moments forts nécessite une transcription");
+    if (!config?.baseUrl || !config?.model) throw new Error("Choisissez le moteur gratuit intégré dans les réglages, ou configurez l’URL et le modèle d’un service IA local");
     // 参考爆款画像(可选):用户显式给的输入,分析失败按无参考继续,
     // 但失败原因必须随结果带回给 UI——不静默丢
     let reference: ReferenceProfile | undefined;
@@ -1009,9 +1017,9 @@ function clipWords(transcript: Transcript, c: HighlightCandidate): TranscriptWor
 }
 
 ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: unknown, options: unknown) => exportTasks.run(async (abortSignal) => {
-  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("export requires a file path");
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("L’export nécessite un chemin de fichier");
   const list = clips as HighlightCandidate[];
-  if (!Array.isArray(list) || list.length === 0) throw new Error("no clips selected");
+  if (!Array.isArray(list) || list.length === 0) throw new Error("Aucun clip sélectionné");
   const opts = (options ?? {}) as ExportOptions;
   const preparing = (preparation: "translation" | "publish" | "variants" | "media"): void => {
     abortSignal.throwIfAborted();
@@ -1045,7 +1053,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   const tr = opts.translate;
   if (
     tr && typeof tr.targetLang === "string" && tr.targetLang.trim() &&
-    tr.llm?.baseUrl && tr.llm?.model && opts.transcript
+    tr.llm?.provider !== "builtin" && tr.llm?.baseUrl && tr.llm?.model && opts.transcript
   ) {
     translatable = collectClipSegments(opts.transcript, list);
     preparing("translation");
@@ -1057,7 +1065,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   const copySources = list.map((c) => ({ id: c.id, title: c.title, hook: c.hook, text: c.text, keywords: c.keywords, saveWorthy: Boolean(c.utility) }));
   let publishCopies: Map<number, import("@core/publish").PublishCopy> | null = null;
   const pub = opts.publishCopy;
-  if (pub?.llm?.baseUrl && pub.llm.model) {
+  if (pub?.llm?.provider !== "builtin" && pub?.llm?.baseUrl && pub.llm.model) {
     preparing("publish");
     publishCopies = await optionalExportStep(abortSignal, () => generatePublishCopies(copySources, zh, pub.llm, chatComplete, abortSignal));
   }
@@ -1065,7 +1073,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   // 失败只是没有变体,原版照常导出)。
   let variantPlans: Map<number, import("@core/variants").VariantPackaging[]> | null = null;
   const varOpt = opts.variants;
-  if (varOpt?.llm?.baseUrl && varOpt.llm.model && Number(varOpt.count) >= 2) {
+  if (varOpt?.llm?.provider !== "builtin" && varOpt?.llm?.baseUrl && varOpt.llm.model && Number(varOpt.count) >= 2) {
     preparing("variants");
     variantPlans = await optionalExportStep(abortSignal, () => generateVariantPlans(
       copySources,
@@ -1298,8 +1306,8 @@ function makeRecordingProcessor(
     if (existingId) {
       await withAutomationTasks((tasks) => {
         const task = tasks.find((item) => item.id === taskId);
-        if (!task) throw new Error("automation task not found");
-        if (!["failed", "cancelled", "interrupted"].includes(task.status)) throw new Error("automation task is not retryable");
+        if (!task) throw new Error("Tâche d’automatisation introuvable");
+        if (!["failed", "cancelled", "interrupted"].includes(task.status)) throw new Error("Cette tâche d’automatisation ne peut pas être relancée");
         Object.assign(task, {
           sourceSize: f.size,
           sourceMtimeMs: f.mtimeMs,
@@ -1404,9 +1412,9 @@ function makeRecordingProcessor(
 }
 
 ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, outDir: unknown) => {
-  if (typeof dir !== "string" || !dir.trim()) throw new Error("watch requires a directory");
+  if (typeof dir !== "string" || !dir.trim()) throw new Error("La surveillance nécessite un dossier");
   const config = llm as LlmConfig;
-  if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+  if (!config?.baseUrl || !config?.model) throw new Error("Choisissez le moteur gratuit intégré dans les réglages, ou configurez l’URL et le modèle d’un service IA local");
   await webhookHandle?.close();
   webhookHandle = null;
   webhookInfo = null;
@@ -1468,11 +1476,11 @@ ipcMain.handle("hotclip:automation-tasks-clear", () => withAutomationTasks((task
 ipcMain.handle("hotclip:automation-task-retry", async (event, id: unknown, llm: unknown, outDir: unknown) => {
   if (typeof id !== "string") return false;
   const config = llm as LlmConfig;
-  if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+  if (!config?.baseUrl || !config?.model) throw new Error("Choisissez le moteur gratuit intégré dans les réglages, ou configurez l’URL et le modèle d’un service IA local");
   const task = (await readAutomationTasks()).find((item) => item.id === id);
   if (!task || ["queued", "running", "completed"].includes(task.status)) return false;
   const info = await stat(task.sourcePath).catch(() => null);
-  if (!info?.isFile()) throw new Error("源文件不存在或不可读");
+  if (!info?.isFile()) throw new Error("Le fichier source est introuvable ou illisible");
   const seen = await loadWatchSeen();
   const emit = (e: Omit<WatchEvent, "at">): void => {
     if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
@@ -1487,15 +1495,15 @@ ipcMain.handle("hotclip:automation-task-retry", async (event, id: unknown, llm: 
 ipcMain.handle(
   "hotclip:webhook-start",
   async (event, dir: unknown, llm: unknown, outDir: unknown, port: unknown, token: unknown) => {
-    if (typeof dir !== "string" || !dir.trim()) throw new Error("webhook 需要指定录播目录");
+    if (typeof dir !== "string" || !dir.trim()) throw new Error("Le webhook nécessite un dossier d’enregistrement");
     const config = llm as LlmConfig;
-    if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+    if (!config?.baseUrl || !config?.model) throw new Error("Choisissez le moteur gratuit intégré dans les réglages, ou configurez l’URL et le modèle d’un service IA local");
     if (watchTimer) clearInterval(watchTimer);
     watchTimer = null;
     watchDirPath = null;
     const recDir = dir.trim();
     const s = await stat(recDir).catch(() => null);
-    if (!s?.isDirectory()) throw new Error(`录播目录不存在: ${recDir}`);
+    if (!s?.isDirectory()) throw new Error(`Le dossier d’enregistrement est introuvable : ${recDir}`);
     await webhookHandle?.close();
     webhookHandle = null;
 
@@ -1515,7 +1523,7 @@ ipcMain.handle(
         webhookChain = webhookChain.then(async () => {
           const st = await stat(e.path).catch(() => null);
           if (!st?.isFile()) {
-            emit({ type: "error", file: basename(e.path), path: e.path, message: "回调指向的文件不存在或不可读" });
+            emit({ type: "error", file: basename(e.path), path: e.path, message: "Le fichier indiqué par le callback est introuvable ou illisible" });
             return;
           }
           const f: WatchedFile = { path: e.path, size: st.size, mtimeMs: st.mtimeMs };

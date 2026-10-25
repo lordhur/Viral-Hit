@@ -20,6 +20,7 @@ import {
   LuRefreshCw,
 } from "react-icons/lu";
 import { useT, useLocaleStore } from "../../i18n/store";
+import { gateNoteText } from "../../i18n/errors";
 import { getApi } from "../../api/provider";
 import { useSession } from "../../stores/session-store";
 import { useRenderPrefs } from "../../stores/render-prefs-store";
@@ -29,6 +30,27 @@ import { clipDurationSec, isStitched } from "../../../../shared/pieces";
 import { summarizeTimingQuality, wordsForClip } from "../../../../shared/transcript-quality";
 import { SectionLabel, Segmented, SwitchRow } from "../ui";
 import type { ClipLength, HighlightCandidate, Transcript } from "../../../../shared/api-types";
+
+const GENRE_FR: Record<string, string> = {
+  auto: "Général / automatique",
+  shopping: "Vente en direct / shopping",
+  game: "Jeux vidéo",
+  esports: "E-sport / commentaires de match",
+  vtuber: "VTuber",
+  show: "Spectacle / danse / chant",
+  looks: "Discussion / social",
+  talk: "Discussion / commentaires",
+  radio: "Radio / audio uniquement",
+  knowledge: "Connaissances / éducation",
+  outdoor: "Extérieur / voyage / terrain",
+  food: "Cuisine / mukbang",
+  pet: "Animaux",
+  sports: "Sport / fitness",
+  craft: "Création / dessin / ambiance",
+  cowatch: "Visionnage partagé / étude ensemble",
+  interview: "Interview / podcast",
+  custom: "Personnalisé",
+};
 
 function formatClock(totalSeconds: number): string {
   const s = Math.floor(totalSeconds);
@@ -212,7 +234,7 @@ function DetailTab({
           <LuTriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
             {c.gate === "drop" ? th("gateDropNote") : c.gate === "review" ? th("gateReviewNote") : th("reviewWeak")}
-            {c.gateNotes?.length ? `:${c.gateNotes.join(";")}` : c.reviewNote ? `:${c.reviewNote}` : ""}
+            {c.gateNotes?.length ? `:${c.gateNotes.map(gateNoteText).join(";")}` : c.reviewNote ? `:${gateNoteText(c.reviewNote)}` : ""}
           </span>
         </p>
       )}
@@ -336,7 +358,7 @@ function ParamsTab({ onRedetect }: { onRedetect: () => void }): React.JSX.Elemen
         >
           {GENRE_PRESETS.map((g) => (
             <option key={g.id} value={g.id}>
-              {lang === "zh" ? g.labelZh : g.labelEn}
+              {lang === "zh" ? g.labelZh : lang === "fr" ? GENRE_FR[g.id] ?? g.labelEn : g.labelEn}
             </option>
           ))}
         </select>

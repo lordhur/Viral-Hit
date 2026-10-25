@@ -68,6 +68,14 @@ interface BrandState {
 
 let seq = 0;
 const newId = (): string => `p${Date.now().toString(36)}${(seq++).toString(36)}`;
+function presetName(kind: "custom" | "new"): string {
+  let locale = typeof document !== "undefined" && document.documentElement.lang ? document.documentElement.lang : typeof navigator !== "undefined" ? navigator.language : "zh";
+  try { locale = localStorage.getItem("viral-hit-locale") ?? localStorage.getItem("hotclip-locale") ?? locale; } catch { /* défaut historique */ }
+  locale = locale.toLowerCase().split("-")[0] ?? "zh";
+  if (locale === "fr") return kind === "custom" ? "Mon style" : "Nouveau préréglage";
+  if (locale === "en") return kind === "custom" ? "My style" : "New preset";
+  return kind === "custom" ? "我的样式" : "新预设";
+}
 
 export const useBrandStore = create<BrandState>((set, get) => ({
   ...load(),
@@ -80,7 +88,7 @@ export const useBrandStore = create<BrandState>((set, get) => ({
     let { presets, activeId } = get();
     // "默认"是只读锚点:一改就分叉出"我的样式",默认永远可回退
     if (activeId === "default") {
-      const fork: BrandPreset = { id: newId(), name: "我的样式", style: {} };
+      const fork: BrandPreset = { id: newId(), name: presetName("custom"), style: {} };
       presets = [...presets, fork];
       activeId = fork.id;
     }
@@ -98,7 +106,7 @@ export const useBrandStore = create<BrandState>((set, get) => ({
     set(s);
   },
   addPreset: (name) => {
-    const preset: BrandPreset = { id: newId(), name: name.trim() || "新预设", style: {} };
+    const preset: BrandPreset = { id: newId(), name: name.trim() || presetName("new"), style: {} };
     const s = { presets: [...get().presets, preset], activeId: preset.id };
     persist(s);
     set(s);

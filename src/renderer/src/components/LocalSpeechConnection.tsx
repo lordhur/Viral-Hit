@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAsrStore } from "../stores/asr-store";
 import { useT } from "../i18n/store";
+import { errorText } from "../i18n/errors";
 import { getApi } from "../api/provider";
 
 export function LocalSpeechConnection(): React.JSX.Element {
@@ -17,7 +18,7 @@ export function LocalSpeechConnection(): React.JSX.Element {
       setBusy(true); setStatus(t("serviceChecking"));
       void getApi().checkLocalSpeech(localServiceUrl).then((info) => {
         if (id === serial.current) setStatus(`${info.model} · ${info.device} · ${t(info.aligner ? "serviceWithAligner" : "serviceWithoutAligner")}`);
-      }, () => { if (id === serial.current) setStatus(t("serviceUnavailable")); }).finally(() => { if (id === serial.current) setBusy(false); });
+      }, (reason) => { if (id === serial.current) setStatus(errorText(reason, t("serviceUnavailable"))); }).finally(() => { if (id === serial.current) setBusy(false); });
     }} className="rounded border border-line px-3 py-2 text-xs disabled:opacity-40">{t("serviceCheck")}</button>
     <p role="status" className="text-xs leading-relaxed text-mut">{status || t("serviceSetupHint")}</p>
   </div>;

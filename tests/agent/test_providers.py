@@ -33,12 +33,24 @@ class ProviderTests(unittest.TestCase):
         })
         self.assertEqual((config.provider, config.model, config.api_key), ("anthropic", "model-a", "secret"))
         self.assertNotIn("secret", str(config.public))
-        legacy = config_from_env({"HOTCLIP_LLM_BASE_URL": "http://127.0.0.1:11434/v1", "HOTCLIP_LLM_MODEL": "local"})
+        legacy = config_from_env({"VIRALHIT_LLM_PROVIDER": "ollama", "HOTCLIP_LLM_BASE_URL": "http://127.0.0.1:11434/v1", "HOTCLIP_LLM_MODEL": "local"})
         self.assertEqual(legacy.base_url, "http://127.0.0.1:11434/v1")
+
+    def test_default_is_builtin_and_scrubs_legacy_cloud_settings(self):
+        config = config_from_env({
+            "HOTCLIP_LLM_BASE_URL": "https://paid.example/v1",
+            "HOTCLIP_LLM_MODEL": "legacy",
+            "HOTCLIP_LLM_API_KEY": "secret",
+        })
+        self.assertEqual(config.provider, "builtin")
+        self.assertEqual(config.base_url, "builtin://local-free")
+        self.assertEqual(config.model, "regles-locales")
+        self.assertEqual(config.api_key, "")
+        self.assertNotIn("secret", str(config.public))
 
     def test_remote_compatible_endpoint_requires_key(self):
         with self.assertRaisesRegex(ProviderError, "API_KEY"):
-            config_from_env({"VIRALHIT_LLM_BASE_URL": "https://example.com/v1", "VIRALHIT_LLM_MODEL": "x"})
+            config_from_env({"VIRALHIT_LLM_PROVIDER": "openai-compatible", "VIRALHIT_LLM_BASE_URL": "https://example.com/v1", "VIRALHIT_LLM_MODEL": "x"})
 
     @patch("agent.providers.urllib.request.urlopen")
     def test_openai_protocol(self, urlopen):

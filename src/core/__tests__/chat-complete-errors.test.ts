@@ -23,7 +23,7 @@ describe("chatComplete 连接失败指引", () => {
   it("云端端点连不上 → 指引查网络与 Base URL,不提 Ollama", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("fetch failed"); }));
     const err = (await chatComplete(CLOUD, "s", "u").catch((e: unknown) => e)) as Error;
-    expect(err.message).toContain("检查网络");
+    expect(err.message).toContain("Vérifiez votre connexion");
     expect(err.message).not.toContain("Ollama");
   });
 
@@ -82,7 +82,7 @@ describe("chatComplete 请求恢复边界", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
     const error = await chatComplete(CLOUD, "s", "u").catch((e: Error) => e) as Error;
-    expect(error.message).toContain("120 秒");
+    expect(error.message).toContain("120 secondes");
     expect(error.message).not.toContain(CLOUD.apiKey);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -155,9 +155,9 @@ describe("chatComplete 空响应处理(issue #8)", () => {
       vi.fn(async () => chatResponse({ content: "", reasoning_content: "想了很久" }, "length"))
     );
     const err = (await chatComplete(CLOUD, "s", "u").catch((e: unknown) => e)) as Error;
-    expect(err.message).toContain("未返回内容");
-    expect(err.message).toContain("深度思考");
-    expect(err.message).toContain("non-thinking");
+    expect(err.message).toContain("aucun contenu exploitable");
+    expect(err.message).toContain("raisonnement");
+    expect(err.message).toContain("non raisonnante");
   });
 
   it("正文被网关错放进 reasoning(正常收尾) → 直接取 reasoning,不重试", async () => {
@@ -170,7 +170,7 @@ describe("chatComplete 空响应处理(issue #8)", () => {
   it("安全审查拦截(content_filter) → 提示换供应商或素材", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => chatResponse({ content: "" }, "content_filter")));
     const err = (await chatComplete(CLOUD, "s", "u").catch((e: unknown) => e)) as Error;
-    expect(err.message).toContain("安全审查");
+    expect(err.message).toContain("filtre de sécurité");
   });
 
   it("重试自身报 HTTP 错 → 不覆盖「空响应」诊断", async () => {
@@ -180,8 +180,8 @@ describe("chatComplete 空响应处理(issue #8)", () => {
       .mockResolvedValueOnce(new Response("max_tokens too large", { status: 400 }));
     vi.stubGlobal("fetch", fetchMock);
     const err = (await chatComplete(CLOUD, "s", "u").catch((e: unknown) => e)) as Error;
-    expect(err.message).toContain("未返回内容");
-    expect(err.message).toContain("深度思考");
+    expect(err.message).toContain("aucun contenu exploitable");
+    expect(err.message).toContain("raisonnement");
   });
 
   it("普通空响应(无思考轨迹) → 重试一次后给通用提示", async () => {
@@ -189,7 +189,7 @@ describe("chatComplete 空响应处理(issue #8)", () => {
     vi.stubGlobal("fetch", fetchMock);
     const err = (await chatComplete(CLOUD, "s", "u").catch((e: unknown) => e)) as Error;
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(err.message).toContain("空内容");
-    expect(err.message).not.toContain("深度思考");
+    expect(err.message).toContain("aucun contenu exploitable");
+    expect(err.message).not.toContain("modèle de raisonnement");
   });
 });

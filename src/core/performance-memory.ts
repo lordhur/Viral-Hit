@@ -238,15 +238,16 @@ const compactMetric = (n: number, zh: boolean): string => {
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : String(n);
 };
 
-const exampleLine = (e: PerformanceEntry, zh: boolean): string => {
+const exampleLine = (e: PerformanceEntry, zh: boolean, fr = false): string => {
   const engagement = e.likes + e.comments + e.shares + e.saves;
   const rate = ((engagement / Math.max(1, e.views)) * 100).toFixed(2);
   const extra = [
-    e.hook ? (zh ? `钩子「${e.hook}」` : `hook "${e.hook}"`) : "",
-    e.durationSec ? `${Math.round(e.durationSec)}s` : "",
-    e.keywords?.slice(0, 4).join(zh ? "、" : ", ") ?? "",
+    e.hook ? (fr ? `accroche « ${e.hook} »` : zh ? `钩子「${e.hook}」` : `hook "${e.hook}"`) : "",
+    e.durationSec ? `${Math.round(e.durationSec)} s` : "",
+    e.keywords?.slice(0, 4).join(zh && !fr ? "、" : ", ") ?? "",
   ]
-    .filter(Boolean).join(zh ? "," : ", ");
+    .filter(Boolean).join(zh && !fr ? "," : ", ");
+  if (fr) return `- [${e.platform}] « ${e.title} » : ${compactMetric(e.views, false)} vues, ${rate} % d’engagement${extra ? `, ${extra}` : ""}`;
   return zh
     ? `- [${e.platform}]《${e.title}》播放 ${compactMetric(e.views, true)},总互动率 ${rate}%${extra ? `,${extra}` : ""}`
     : `- [${e.platform}] "${e.title}" ${compactMetric(e.views, false)} views, ${rate}% total engagement${extra ? `, ${extra}` : ""}`;
@@ -266,13 +267,15 @@ export function performanceMemorySection(entries: PerformanceEntry[], zh: boolea
   return out;
 }
 
-export function performanceReport(entries: PerformanceEntry[], zh = true): string {
-  if (entries.length === 0) return zh ? "还没有发布表现数据。" : "No post-performance data yet.";
+export function performanceReport(entries: PerformanceEntry[], zh = true, fr = false): string {
+  if (entries.length === 0) return fr ? "Aucune donnée de performance après publication pour le moment." : zh ? "还没有发布表现数据。" : "No post-performance data yet.";
   const { winners, laggards } = performanceExamples(entries);
   const platforms = [...new Set(entries.map((e) => e.platform))].join(", ");
-  const lines = zh
-    ? [`已学习 ${entries.length} 条发布记录 · 平台: ${platforms}`, "", "高表现:", ...winners.map((e) => exampleLine(e, true))]
-    : [`Learned from ${entries.length} posts · Platforms: ${platforms}`, "", "High performers:", ...winners.map((e) => exampleLine(e, false))];
-  if (laggards.length > 0) lines.push("", zh ? "低表现:" : "Low performers:", ...laggards.map((e) => exampleLine(e, zh)));
+  const lines = fr
+    ? [`${entries.length} publications analysées · Plateformes : ${platforms}`, "", "Meilleures performances :", ...winners.map((e) => exampleLine(e, false, true))]
+    : zh
+      ? [`已学习 ${entries.length} 条发布记录 · 平台: ${platforms}`, "", "高表现:", ...winners.map((e) => exampleLine(e, true))]
+      : [`Learned from ${entries.length} posts · Platforms: ${platforms}`, "", "High performers:", ...winners.map((e) => exampleLine(e, false))];
+  if (laggards.length > 0) lines.push("", fr ? "Performances plus faibles :" : zh ? "低表现:" : "Low performers:", ...laggards.map((e) => exampleLine(e, zh, fr)));
   return lines.join("\n");
 }

@@ -34,9 +34,11 @@ import {
   LuUpload,
 } from "react-icons/lu";
 import { useT, useLocaleStore } from "../i18n/store";
+import { localizeDoctorCheck } from "../i18n/diagnostics";
+import { errorText } from "../i18n/errors";
 import { LOCALE_LIST, REGISTRY } from "../i18n/messages";
 import { getApi, isElectron } from "../api/provider";
-import { useLlmStore, LLM_PRESET_LIST, LLM_PRESETS, presetForBaseUrl } from "../stores/llm-store";
+import { useLlmStore, LLM_FREE_PRESET_LIST, presetForBaseUrl } from "../stores/llm-store";
 import { useAsrStore } from "../stores/asr-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
 import { useSession } from "../stores/session-store";
@@ -62,6 +64,7 @@ const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
 };
 
 const ENGINE_TEXT: Record<string, { name: string; desc: string }> = {
+  "whisper-fr": { name: "engineWhisperFrName", desc: "engineWhisperFrDesc" },
   sensevoice: { name: "engineSensevoiceName", desc: "engineSensevoiceDesc" },
   paraformer: { name: "engineParaformerName", desc: "engineParaformerDesc" },
   qwen3: { name: "engineQwenName", desc: "engineQwenDesc" },
@@ -186,7 +189,7 @@ function PerformanceSection(): React.JSX.Element {
     try {
       setSummary(await getApi().performanceGet());
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setLoading(false);
     }
@@ -214,7 +217,7 @@ function PerformanceSection(): React.JSX.Element {
         unmatched: result.correlation.unmatched + result.correlation.ambiguous,
       }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setImporting(false);
     }
@@ -229,7 +232,7 @@ function PerformanceSection(): React.JSX.Element {
       if (result) setNotice(t("templateSuccess", { count: result.count }));
       else if (summary?.publishing.awaitingMetrics === 0) setNotice(t("templateEmpty"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setTemplating(false);
     }
@@ -249,7 +252,7 @@ function PerformanceSection(): React.JSX.Element {
       setNotice(t("clearSuccess"));
       setConfirmClear(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setClearing(false);
     }
@@ -449,12 +452,14 @@ function AiSection(): React.JSX.Element {
   const [modelError, setModelError] = useState("");
   const [checking, setChecking] = useState(false);
   const [verdict, setVerdict] = useState<PreflightVerdict | null>(null);
+  const builtin = config.provider === "builtin";
 
   useEffect(() => {
     setVerdict(null);
   }, [config.baseUrl, config.apiKey, config.model, config.provider]);
 
   const fetchModels = useCallback(async (): Promise<void> => {
+    if (config.provider === "builtin") return;
     setModelLoading(true);
     setModelError("");
     const res = await getApi().listLlmModels(config.baseUrl, config.apiKey ?? "", config.provider);
@@ -465,6 +470,7 @@ function AiSection(): React.JSX.Element {
 
   // 连接自检:必败配置(Ollama 没跑/Key 错/模型没拉)当场给指引(issue #6)
   const check = useCallback(async (): Promise<void> => {
+    if (config.provider === "builtin") return;
     setChecking(true);
     const res = await getApi().listLlmModels(config.baseUrl, config.apiKey ?? "", config.provider);
     setChecking(false);
@@ -477,7 +483,7 @@ function AiSection(): React.JSX.Element {
       <div>
         <p className="text-[12.5px] leading-relaxed text-mut">{t("llmDesc")}</p>
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {LLM_PRESET_LIST.map((preset) => {
+          {LLM_FREE_PRESET_LIST.map((preset) => {
             const active = config.baseUrl === preset.baseUrl;
             return (
               <button
@@ -493,30 +499,23 @@ function AiSection(): React.JSX.Element {
                 }`}
               >
                 {preset.label}
-                <div className="mt-0.5 truncate text-[10.5px] font-normal text-mut">{preset.baseUrl.replace(/^https?:\/\//, "")}</div>
+                <div className="mt-0.5 truncate text-[10.5px] font-normal text-mut">{preset.provider === "builtin" ? t("llmBuiltinMeta") : preset.baseUrl.replace(/^https?:\/\//, "")}</div>
               </button>
             );
           })}
         </div>
+        {builtin && (
+          <p className="mt-2.5 rounded-lg bg-emerald-500/10 px-3 py-2 text-[11.5px] leading-relaxed text-emerald-300">{t("llmBuiltinHint")}</p>
+        )}
         {presetForBaseUrl(config.baseUrl)?.id === "ollama" && (
           <p className="mt-2.5 rounded-lg bg-amber-500/10 px-3 py-2 text-[11.5px] leading-relaxed text-amber-400/90">{t("llmOllamaHint")}</p>
         )}
         <div className="mt-4 space-y-3">
           <label className="block">
             <span className="text-[11px] font-semibold text-mut">{t("llmBaseUrl")}</span>
-            <input value={config.baseUrl} onChange={(e) => setConfig({ baseUrl: e.target.value })} className={inputCls} />
+            <input value={config.baseUrl} disabled={builtin} onChange={(e) => setConfig({ baseUrl: e.target.value })} className={inputCls} />
           </label>
-          <label className="block">
-            <span className="text-[11px] font-semibold text-mut">{t("llmApiKey")}</span>
-            <input
-              type="password"
-              value={config.apiKey}
-              onChange={(e) => setConfig({ apiKey: e.target.value })}
-              placeholder={t("llmKeyPlaceholder")}
-              className={inputCls}
-            />
-            <span className="mt-1.5 block text-[10.5px] leading-relaxed text-mut/80">{t("llmKeyMemory")}</span>
-          </label>
+
           <label className="block">
             <span className="text-[11px] font-semibold text-mut">{t("llmModel")}</span>
             <div className="mt-1 flex gap-2">
@@ -533,13 +532,14 @@ function AiSection(): React.JSX.Element {
               )}
               <input
                 value={config.model}
+                disabled={builtin}
                 list="hotclip-model-list"
                 onChange={(e) => setConfig({ model: e.target.value })}
                 className="min-w-0 flex-1 rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
               />
               <button
                 type="button"
-                disabled={!config.baseUrl || modelLoading}
+                disabled={builtin || !config.baseUrl || modelLoading}
                 onClick={() => void fetchModels()}
                 className="shrink-0 rounded-lg border border-line px-3 py-2 text-[12px] font-semibold text-mut transition-colors hover:border-mut hover:text-fg disabled:opacity-40"
               >
@@ -552,7 +552,7 @@ function AiSection(): React.JSX.Element {
               ))}
             </datalist>
             {modelList.length > 0 && <span className="mt-1 block text-[10.5px] text-mut/80">{t("llmModelsFound", { n: modelList.length })}</span>}
-            {modelError && <span className="mt-1 block text-[10.5px] text-amber-400/90">{modelError}</span>}
+            {modelError && <span className="mt-1 block text-[10.5px] text-amber-400/90">{errorText(modelError)}</span>}
           </label>
         </div>
         {verdict && verdict.kind !== "ok" && verdict.kind !== "unknown" && (
@@ -585,14 +585,14 @@ function AiSection(): React.JSX.Element {
             {t("llmModelsFound", { n: modelList.length })}
           </p>
         )}
-        <div className="mt-4 flex items-center justify-between">
+        {!builtin && <div className="mt-4 flex items-center justify-between">
           <a
-            href={presetForBaseUrl(config.baseUrl)?.keyUrl || LLM_PRESETS.atlas.keyUrl}
+            href="https://ollama.com"
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1 text-[12px] text-ember hover:underline"
           >
-            {t("llmGetKey")}
+            {t("llmOllamaInstall")}
             <LuExternalLink className="h-3 w-3" />
           </a>
           <button
@@ -603,11 +603,11 @@ function AiSection(): React.JSX.Element {
           >
             {checking ? t("preflightChecking") : t("llmModelsFetch")}
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* 两级漏斗:本地小模型初筛 */}
-      <div className="rounded-xl border border-dashed border-line p-3.5">
+      {!builtin && <div className="rounded-xl border border-dashed border-line p-3.5">
         <div className="flex items-center justify-between">
           <span className="text-[12.5px] font-bold">{t("prefilterTitle")}</span>
           <Switch on={prefilter.enabled} onToggle={() => setPrefilter({ enabled: !prefilter.enabled })} />
@@ -625,10 +625,10 @@ function AiSection(): React.JSX.Element {
             </label>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* 视觉信号 + 全场扫描 */}
-      <div className="rounded-xl border border-dashed border-line p-3.5">
+      {!builtin && <div className="rounded-xl border border-dashed border-line p-3.5">
         <div className="flex items-center justify-between">
           <span className="text-[12.5px] font-bold">{t("visionTitle")}</span>
           <Switch on={vision.enabled} onToggle={() => setVision({ enabled: !vision.enabled })} />
@@ -644,22 +644,12 @@ function AiSection(): React.JSX.Element {
               <span className="text-[11px] font-semibold text-mut">{t("llmModel")}</span>
               <input value={vision.model} onChange={(e) => setVision({ model: e.target.value })} className={inputCls} />
             </label>
-            <label className="col-span-2 block">
-              <span className="text-[11px] font-semibold text-mut">{t("visionApiKey")}</span>
-              <input
-                type="password"
-                value={vision.apiKey ?? ""}
-                onChange={(e) => setVision({ apiKey: e.target.value })}
-                placeholder={t("visionApiKeyPlaceholder")}
-                className={inputCls}
-              />
-            </label>
             <div className="col-span-2">
               <SwitchRow label={t("scanTitle")} hint={t("scanDesc")} on={prefs.fullScan} onToggle={() => setPref({ fullScan: !prefs.fullScan })} />
             </div>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -668,7 +658,7 @@ function AiSection(): React.JSX.Element {
 function AsrSection(): React.JSX.Element {
   const t = useT("transcribe");
   const tw = useT("workbench");
-  const { engineId, setEngineId, keys, setKey } = useAsrStore();
+  const { engineId, setEngineId } = useAsrStore();
   const [engines, setEngines] = useState<AsrEngineInfo[] | null>(null);
   useEffect(() => {
     getApi()
@@ -680,7 +670,7 @@ function AsrSection(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[12.5px] leading-relaxed text-mut">{tw("asrDesc")}</p>
-      {(engines ?? []).map((e) => {
+      {(engines ?? []).filter((e) => e.kind !== "cloud").map((e) => {
         const text = ENGINE_TEXT[e.id];
         const active = engineId === e.id;
         return (
@@ -697,16 +687,6 @@ function AsrSection(): React.JSX.Element {
               </span>
             </div>
             {text && <p className="mt-1 text-[12px] text-mut">{t(text.desc)}</p>}
-            {active && e.kind === "cloud" && (
-              <input
-                type="password"
-                value={keys[e.id] ?? ""}
-                onChange={(ev) => setKey(e.id, ev.target.value)}
-                onClick={(ev) => ev.stopPropagation()}
-                placeholder={t("cloudKeyPlaceholder")}
-                className="mt-2.5 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[12px] outline-none focus:border-ember/60"
-              />
-            )}
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10.5px]">
               <span className="chip rounded-md px-2 py-0.5">{e.uploads ? t("badgeNeedsUpload") : t("badgeLocalPrivate")}</span>
               <span className="chip rounded-md px-2 py-0.5">{t("badgeLangs", { langs: e.langs.join("/") })}</span>
@@ -751,7 +731,7 @@ function StorageSection(): React.JSX.Element {
       await loadModels();
     } catch (e) {
       // 搬家失败必须说清楚——用户最怕的是「模型是不是被弄丢了」
-      setMoveError(e instanceof Error ? e.message : String(e));
+      setMoveError(errorText(e));
     } finally {
       setMoving(false);
     }
@@ -945,7 +925,7 @@ function DiagnosticsSection(): React.JSX.Element {
     try {
       setReport(await getApi().diagnosticsRun(config.baseUrl && config.model ? config : null, locale));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setRunning(false);
     }
@@ -966,7 +946,7 @@ function DiagnosticsSection(): React.JSX.Element {
       setNotice(t("clearCacheSuccess"));
       setConfirmClearCache(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setClearingCache(false);
     }
@@ -987,7 +967,7 @@ function DiagnosticsSection(): React.JSX.Element {
       setNotice(t("clearEvidenceSuccess"));
       setConfirmClearEvidence(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setClearingEvidence(false);
     }
@@ -1004,7 +984,7 @@ function DiagnosticsSection(): React.JSX.Element {
       setReport(await getApi().diagnosticsPrepareModels(config.baseUrl && config.model ? config : null, locale));
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (!/abort/i.test(message)) setError(message);
+      if (!/abort/i.test(message)) setError(errorText(e));
     } finally {
       setRepairing(false);
       setProgress(null);
@@ -1088,7 +1068,7 @@ function DiagnosticsSection(): React.JSX.Element {
             {failures > 0 && <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-red-300">{t("failCount", { n: failures })}</span>}
           </div>
           <ul className="space-y-2">
-            {report.checks.map((check) => (
+            {(locale === "fr" ? report.checks.map(localizeDoctorCheck) : report.checks).map((check) => (
               <li key={check.id} className="rounded-xl border border-line bg-panel-2 px-3.5 py-3">
                 <div className="flex items-start gap-2.5">
                   {check.status === "ok" ? <LuCircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" /> : <LuTriangleAlert className={`mt-0.5 h-4 w-4 shrink-0 ${check.status === "fail" ? "text-red-400" : "text-amber-400"}`} />}

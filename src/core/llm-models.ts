@@ -61,7 +61,7 @@ export async function listModels(baseUrl: string, apiKey: string, provider?: Llm
     const ids = parseModelIds(JSON.parse(text));
     return ids.length > 0
       ? { ids, error: null }
-      : { ids: [], error: "该端点没有返回模型清单 / endpoint returned no models" };
+      : { ids: [], error: "Le service n’a renvoyé aucune liste de modèles. Vérifiez son adresse ou choisissez le moteur gratuit intégré." };
   } catch (e) {
     return { ids: [], error: modelErrorDetail(e instanceof Error ? e.message : String(e), apiKey, 300) };
   }

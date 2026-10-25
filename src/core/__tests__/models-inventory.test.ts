@@ -110,7 +110,7 @@ describe("moveModelsDir", () => {
   it("拒绝搬进自己的子目录(否则递归复制自己)", async () => {
     const from = join(base, "models");
     await seedModels(from);
-    await expect(moveModelsDir(from, join(from, "inner"))).rejects.toThrow(/内部/);
+    await expect(moveModelsDir(from, join(from, "inner"))).rejects.toThrow(/dossier de modèles actuel/);
     expect(await dirSize(from)).toBe(3072); // 原件没被动过
   });
 
@@ -121,7 +121,7 @@ describe("moveModelsDir", () => {
     await mkdir(to, { recursive: true });
     await writeFile(join(to, "someone-elses-file"), "keep me");
 
-    await expect(moveModelsDir(from, to)).rejects.toThrow(/空/);
+    await expect(moveModelsDir(from, to)).rejects.toThrow(/pas vide/);
     expect(await dirSize(from)).toBe(3072); // 原件仍在
     expect(await readFile(join(to, "someone-elses-file"), "utf8")).toBe("keep me"); // 别人的文件没被删
   });

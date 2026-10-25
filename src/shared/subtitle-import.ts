@@ -31,17 +31,17 @@ export function describeSubtitleImportError(error: unknown): string {
   const issue = subtitleImportError(error);
   if (!issue) return error instanceof Error ? error.message : String(error);
   const advice: Record<SubtitleImportErrorCode, string> = {
-    format: "Choose a UTF-8 .srt or .vtt file.",
-    size: "The subtitle file exceeds 5 MB; export a smaller transcript.",
-    encoding: "Save the subtitle file as UTF-8 and retry.",
-    cue: "Check cue text, timestamp syntax and blank lines between cues.",
-    empty: "The file has no subtitle cues.",
-    overlap: "Export a single chronological transcript track without overlapping cues.",
-    range: "Subtitle times exceed the source duration; choose subtitles aligned to this media file.",
-    limit: "Import is limited to 20,000 cues, 100,000 words and 8,000 characters per cue.",
-    mapped: "Export a standalone SRT/WebVTT aligned to this media, without a streaming timestamp map.",
+    format: "Choisissez un fichier .srt ou .vtt encodé en UTF-8.",
+    size: "Le fichier de sous-titres dépasse 5 Mo ; exportez une transcription plus courte.",
+    encoding: "Enregistrez les sous-titres en UTF-8, puis réessayez.",
+    cue: "Vérifiez le texte, les horodatages et les lignes vides entre les segments.",
+    empty: "Le fichier ne contient aucun segment de sous-titres.",
+    overlap: "Exportez une seule piste chronologique, sans segments qui se chevauchent.",
+    range: "Les horodatages dépassent la durée de la source ; choisissez des sous-titres alignés sur ce média.",
+    limit: "L’import est limité à 20 000 segments, 100 000 mots et 8 000 caractères par segment.",
+    mapped: "Exportez un SRT/WebVTT autonome aligné sur ce média, sans table d’horodatage de flux.",
   };
-  return `subtitle-import:${issue.code}:${issue.cue} ${advice[issue.code]}${issue.cue ? ` Cue ${issue.cue}.` : ""}`;
+  return `subtitle-import:${issue.code}:${issue.cue} ${advice[issue.code]}${issue.cue ? ` Segment ${issue.cue}.` : ""}`;
 }
 
 export function validateSubtitleInput(text: unknown, format: unknown): asserts text is string {

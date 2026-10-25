@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checksumForAsset, parseYtDlpProgress, validateMediaUrl, ytDlpAsset } from "../url-import";
+import { localizeErrorMessage, localizeUrlImportError } from "../../shared/french-errors";
 
 describe("URL source validation", () => {
   it("accepts ordinary HTTP(S) video pages and normalizes them", () => {
@@ -23,13 +24,40 @@ describe("URL source validation", () => {
   });
 });
 
+
+describe("causes d’import URL localisées", () => {
+  it.each([
+    ["ftp://example.com/video.mp4", "url:http-required", "http://"],
+    ["https://user:pass@example.com/video", "url:credentials", "identifiants"],
+    ["http://127.0.0.1/video.mp4", "url:local", "adresses locales ou privées"],
+  ])("conserve le code et la cause française pour %s", (url, code, expected) => {
+    const validate = (): string => validateMediaUrl(url);
+    expect(validate).toThrow(code);
+    try { validate(); } catch (error) { expect(localizeErrorMessage(error)).toContain(expected); }
+  });
+
+  it("distingue plateforme, intégrité du composant et média récupéré", () => {
+    expect(localizeErrorMessage("url:unsupported-platform freebsd/x64")).toContain("pas disponible sur cette plateforme");
+    expect(localizeErrorMessage("url:tool-integrity checksum missing")).toContain("vérification d’intégrité");
+    expect(localizeErrorMessage("url:invalid-download empty media file")).toContain("flux audio ou vidéo");
+  });
+
+  it("distingue le réseau, une indisponibilité et un détail inconnu", () => {
+    expect(localizeErrorMessage("url:download ERROR: getaddrinfo ENOTFOUND example.com")).toContain("Impossible de joindre le site");
+    expect(localizeErrorMessage("url:download ERROR: HTTP Error 503")).toContain("temporairement indisponible");
+    const fallback = localizeUrlImportError("Unexpected native failure");
+    expect(fallback).toContain("import de cette URL");
+    expect(fallback).not.toContain("Unexpected");
+  });
+});
+
 describe("yt-dlp release assets", () => {
   it("selects self-contained binaries for supported desktop targets", () => {
     expect(ytDlpAsset("darwin", "arm64")).toBe("yt-dlp_macos");
     expect(ytDlpAsset("win32", "x64")).toBe("yt-dlp.exe");
     expect(ytDlpAsset("linux", "x64")).toBe("yt-dlp_linux");
     expect(ytDlpAsset("linux", "arm64")).toBe("yt-dlp_linux_aarch64");
-    expect(() => ytDlpAsset("freebsd", "x64")).toThrow(/not available/);
+    expect(() => ytDlpAsset("freebsd", "x64")).toThrow(/url:unsupported-platform/);
   });
 
   it("reads an exact asset hash from the official checksum manifest", () => {

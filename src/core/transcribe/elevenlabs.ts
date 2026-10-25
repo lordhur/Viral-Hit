@@ -47,7 +47,7 @@ export function parseScribeWords(res: ScribeResponse): TranscriptWord[] {
 
 export class ElevenLabsEngine implements TranscribeEngine {
   id = "elevenlabs-cloud";
-  label = "ElevenLabs Scribe (云端 · 90+ 语种)";
+  label = "ElevenLabs Scribe (cloud facultatif · plus de 90 langues)";
 
   constructor(
     private apiKey: string,
@@ -60,7 +60,7 @@ export class ElevenLabsEngine implements TranscribeEngine {
 
   async transcribe(filePath: string, options: TranscribeOptions = {}): Promise<Transcript> {
     const { onProgress, signal } = options;
-    if (!this.apiKey) throw new Error("需要 ElevenLabs API Key / ElevenLabs API key required");
+    if (!this.apiKey) throw new Error("La transcription ElevenLabs facultative nécessite sa clé API. Whisper français reste disponible localement et gratuitement.");
 
     // extract compact mono audio — never upload the raw video
     onProgress?.({ fraction: 0, stage: "decoding" });
@@ -86,24 +86,23 @@ export class ElevenLabsEngine implements TranscribeEngine {
           body: form,
           signal,
         });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        throw new Error(`无法连接 ElevenLabs / cannot reach ElevenLabs: ${msg}`);
+      } catch {
+        throw new Error("Impossible de joindre ElevenLabs. Vérifiez Internet et le proxy, ou utilisez Whisper français localement et gratuitement.");
       }
       const bodyText = await res.text();
       if (!res.ok) {
-        throw new Error(`ElevenLabs 转写失败 / transcription failed (HTTP ${res.status}): ${bodyText.slice(0, 300)}`);
+        throw new Error(`ElevenLabs a refusé la transcription (HTTP ${res.status}). Vérifiez la clé et le quota de ce fournisseur facultatif, ou utilisez Whisper français gratuitement.`);
       }
       let data: ScribeResponse;
       try {
         data = JSON.parse(bodyText);
       } catch {
-        throw new Error(`ElevenLabs 返回非 JSON / non-JSON response: ${bodyText.slice(0, 200)}`);
+        throw new Error("ElevenLabs a renvoyé une réponse illisible. Réessayez plus tard ou utilisez Whisper français localement.");
       }
 
       onProgress?.({ fraction: 0.9, stage: "finalizing" });
       const words = parseScribeWords(data);
-      if (words.length === 0) throw new Error("云端未返回词级时间戳 / no word timestamps returned");
+      if (words.length === 0) throw new Error("ElevenLabs n’a renvoyé aucun horodatage de mot. Utilisez Whisper français ou réessayez avec un autre extrait.");
       return {
         language: (data.language_code ?? "auto").slice(0, 5),
         segments: segmentWords(words),

@@ -2,7 +2,7 @@
 
 **Agent vidéo local-first pour créer des shorts viraux et des récaps narrés**, depuis une interface unique, un CLI ou MCP.
 
-Viral Hit réunit les quatre projets sources demandés — AutoClip, AICLIPS Studio, HotClip et Video Recap Skills — au lieu de demander de lancer quatre applications. Les médias, projets, caches, jobs et exports restent sur la machine. Seuls les textes nécessaires sont envoyés au fournisseur d’IA que vous configurez.
+Viral Hit réunit les quatre projets sources demandés — AutoClip, AICLIPS Studio, HotClip et Video Recap Skills — au lieu de demander de lancer quatre applications. Les médias, projets, caches, jobs et exports restent sur la machine. **Le parcours de clips est gratuit par défaut : détection intégrée et transcription française locale, sans clé API ni envoi de texte vers un fournisseur cloud.**
 
 ## Accès rapide
 
@@ -55,8 +55,8 @@ Le desktop et le serveur partagent le même répertoire de données Viral Hit. P
 ### 1. Clips viraux
 
 - Import MP4, MOV, MKV, WebM, FLV ou audio ; import d’URL et de sous-titres SRT/WebVTT.
-- Transcription locale SenseVoice, Paraformer ou FireRedASR ; Qwen3-ASR via un service local ; ElevenLabs sur desktop.
-- Détection de moments forts par LLM, preuves textuelles et audiovisuelles, référence de rythme, préférences et retours de performance.
+- **Transcription française par défaut avec Whisper Base local** : environ 198 Mio au premier lancement, puis hors ligne et sans clé. SenseVoice, Paraformer, FireRedASR et Qwen3 local restent disponibles pour les autres besoins.
+- Détection de moments forts par le **moteur intégré gratuit**, avec preuves textuelles et audiovisuelles ; Ollama local reste une option, mais aucun jeton cloud n’est utilisé par défaut.
 - Révision avant export, montage multi-extraits, recadrage 9:16, suivi de visage, sous-titres, jump cut, nettoyage audio, musique, habillage de marque et variantes.
 - Export MP4, couverture, SRT, timeline/EDL, brouillon Jianying, packs de publication et de série.
 - Contrôle qualité : durée, noir, silence, gel, loudness, coupures de parole et alertes de contenu ; réparations bornées et consignées.
@@ -69,32 +69,22 @@ Le desktop et le serveur partagent le même répertoire de données Viral Hit. P
 - Jobs persistants, annulation, reprise du répertoire de travail, prévisualisation et téléchargement.
 - Confirmation explicite des droits sur le média et le clonage vocal pour le mode `dub`.
 
-Le chemin Récap par défaut utilise les services MiMo configurés pour l’ASR/VLM/TTS. Aucun faux résultat n’est produit si un fournisseur n’est pas configuré : le job indique clairement ce qui manque.
+Le récap autonome est une fonction avancée : il ne démarre que si Ollama et IndexTTS sont configurés localement et que l’ASR cloud est ignoré. Sinon, le job est bloqué **avant tout appel réseau** avec une explication française. La création de clips ne dépend pas de ces composants.
 
 ## Configuration de l’IA
 
-Copiez `.env.example` vers `.env`. Ne committez jamais ce fichier. Les valeurs `VIRALHIT_*` sont prioritaires ; les anciennes variables `HOTCLIP_LLM_*` restent acceptées pour le clipping.
+**Aucune configuration n’est nécessaire pour les clips.** Le défaut est `VIRALHIT_LLM_PROVIDER=builtin` ; une ancienne configuration Atlas/cloud enregistrée par l’interface est migrée vers ce moteur et son jeton est supprimé. Le français utilise `whisper-fr` et les anciens réglages SenseVoice/ElevenLabs sont migrés vers ce moteur.
 
-Exemple local avec Ollama :
+Pour choisir explicitement Ollama, copiez `.env.example` vers `.env` (ne committez jamais ce fichier), puis utilisez :
 
 ```dotenv
 VIRALHIT_LLM_PROVIDER=ollama
 VIRALHIT_LLM_BASE_URL=http://127.0.0.1:11434/v1
-VIRALHIT_LLM_MODEL=qwen3:8b
+VIRALHIT_LLM_MODEL=qwen3:4b
 VIRALHIT_LLM_API_KEY=
 ```
 
-Fournisseurs pris en charge : `openai-compatible`, `openai`, `anthropic`, `gemini`, `mimo` et `ollama`. Pour un fournisseur cloud, définissez son endpoint, le modèle réellement disponible et `VIRALHIT_LLM_API_KEY`. Aucun nom de modèle n’est deviné à votre place.
-
-Pour les récaps, configurez également les clés du chemin média choisi :
-
-```dotenv
-MIMO_API_KEY=
-# Ou les clés séparées : MIMO_VIDEO_API_KEY, MIMO_ASR_API_KEY, MIMO_TTS_API_KEY
-# FISH_API_KEY et TTS_PROVIDER sont également reconnus par les skills conservés.
-```
-
-Dans **Réglages**, l’UI accepte aussi une clé pour la session courante. **Les clés saisies dans l’UI ne sont plus enregistrées dans `localStorage`** ; seules les préférences non sensibles y persistent. La configuration durable de référence reste `.env` / l’environnement.
+Les anciens fournisseurs cloud restent compatibles uniquement comme options avancées explicites ; ils ne sont ni proposés dans le parcours normal ni nécessaires. L’interface n’accepte plus de clé cloud pour la détection ou la transcription. Le récap local avancé exige séparément Ollama, `TTS_PROVIDER=index-tts`, `INDEX_TTS_ENDPOINT`, `INDEX_TTS_VOICE` et l’option **Ignorer l’ASR**.
 
 Vérification sans afficher de secret :
 
@@ -191,8 +181,9 @@ Ordre de résolution :
 ## Limites explicites
 
 - Le style de sous-titres **Bubble** nécessite le renderer offscreen Electron ; les autres styles natifs sont disponibles dans le navigateur.
-- La transcription ElevenLabs, les dialogues de fichiers natifs et certaines automations desktop ne sont pas reproduits artificiellement dans le navigateur.
-- Un fournisseur créatif est nécessaire pour la sélection par IA et le plan narratif. Un fournisseur ASR/VLM/TTS est nécessaire pour les étapes Récap correspondantes.
+- Les dialogues de fichiers natifs et certaines automations desktop ne sont pas reproduits artificiellement dans le navigateur.
+- Whisper Base produit le texte français localement ; lorsque le modèle ne fournit pas de temps natifs, les temps des mots sont marqués comme estimés et peuvent être réalignés.
+- La détection intégrée ne remplace pas un grand modèle créatif pour le plan narratif : le récap exige la configuration locale avancée décrite ci-dessus.
 - Les exports sont **prêts à publier** ; Viral Hit ne publie pas automatiquement sur vos comptes sociaux.
 
 ## Origine des composants

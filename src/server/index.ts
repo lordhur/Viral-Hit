@@ -7,6 +7,9 @@ import { EventHub } from "./events";
 import { LocalService } from "./service";
 import { JobManager, type RecapJobInput } from "./jobs";
 import { assertInside, isPathInside, loadLocalEnv, serverDataDir, serverRoot } from "./config";
+import { localizeErrorMessage } from "../shared/french-errors";
+import { describeSubtitleImportError } from "../shared/subtitle-import";
+import { ERR_TAG_MODEL_DOWNLOAD, ERR_TAG_MODEL_LOAD, ERR_TAG_NO_AUDIO } from "../shared/transcribe-errors";
 
 loadLocalEnv(serverRoot());
 
@@ -36,8 +39,14 @@ function json(res: ServerResponse, status: number, value: unknown): void {
 }
 
 function errorResponse(res: ServerResponse, error: unknown): void {
-  const message = error instanceof Error ? error.message : String(error);
-  const status = /not found|ENOENT/i.test(message) ? 404 : /unknown local api|required|invalid|inside|only accesses|not readable/i.test(message) ? 400 : 500;
+  const raw = error instanceof Error ? error.message : String(error);
+  const status = /not found|ENOENT|introuvable/i.test(raw) ? 404 : /unknown local api|required|invalid|inside|only accesses|not readable|obligatoire|invalide|inconnue|non pris en charge|illisible/i.test(raw) ? 400 : 500;
+  let message = localizeErrorMessage(describeSubtitleImportError(error));
+  // Les marqueurs restent disponibles aux adaptateurs, mais le texte qui les suit
+  // est français : ils ne servent plus de véhicule à une erreur native bilingue.
+  const marker = [ERR_TAG_NO_AUDIO, ERR_TAG_MODEL_DOWNLOAD, ERR_TAG_MODEL_LOAD].find((tag) => raw.includes(tag))
+    ?? raw.match(/qwen:[a-z0-9-]+/i)?.[0];
+  if (marker && !message.includes(marker)) message = `${marker} ${message}`;
   json(res, status, { error: message.slice(0, 2000) });
 }
 
@@ -46,11 +55,11 @@ async function bodyJson(request: IncomingMessage): Promise<any> {
   let size = 0;
   for await (const chunk of request) {
     size += chunk.byteLength;
-    if (size > JSON_LIMIT) throw new Error("JSON request exceeds the 36 MiB safety limit");
+    if (size > JSON_LIMIT) throw new Error("La requête JSON dépasse la limite de sécurité de 36 Mio");
     chunks.push(chunk);
   }
   if (!size) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new Error("Requête JSON invalide"); }
 }
 
 function mutationAllowed(request: IncomingMessage): boolean {
@@ -69,12 +78,12 @@ function mutationAllowed(request: IncomingMessage): boolean {
 async function upload(request: IncomingMessage, url: URL): Promise<{ path: string }> {
   const kind = url.searchParams.get("kind") || "media";
   const allowed = UPLOAD_EXTENSIONS[kind];
-  if (!allowed) throw new Error("Unknown upload kind");
+  if (!allowed) throw new Error("Type de téléversement inconnu");
   const original = basename(url.searchParams.get("filename") || "upload").slice(0, 180);
   const extension = extname(original).toLowerCase();
-  if (!allowed.has(extension)) throw new Error(`Unsupported ${kind} file extension: ${extension || "none"}`);
+  if (!allowed.has(extension)) throw new Error(`Extension de fichier ${kind} non prise en charge : ${extension || "absente"}`);
   const declared = Number(request.headers["content-length"] || 0);
-  if (declared > UPLOAD_LIMIT) throw new Error("Upload exceeds the configured local size limit");
+  if (declared > UPLOAD_LIMIT) throw new Error("Le téléversement dépasse la limite locale configurée");
   const directory = join(serverDataDir(), kind === "media" ? "uploads" : kind === "asset" ? "assets" : "imports");
   await mkdir(directory, { recursive: true });
   const destination = join(directory, `${randomUUID()}${extension}`);
@@ -84,10 +93,10 @@ async function upload(request: IncomingMessage, url: URL): Promise<{ path: strin
   try {
     for await (const chunk of request) {
       size += chunk.byteLength;
-      if (size > UPLOAD_LIMIT) throw new Error("Upload exceeds the configured local size limit");
+      if (size > UPLOAD_LIMIT) throw new Error("Le téléversement dépasse la limite locale configurée");
       await handle.write(chunk);
     }
-    if (!size) throw new Error("The uploaded file is empty");
+    if (!size) throw new Error("Le fichier téléversé est vide");
     await handle.close();
     await rename(temporary, destination);
     return { path: destination };
@@ -100,7 +109,7 @@ async function upload(request: IncomingMessage, url: URL): Promise<{ path: strin
 
 async function mediaPath(encoded: string): Promise<string> {
   let decoded: string;
-  try { decoded = decodeURIComponent(encoded); } catch { throw new Error("Invalid media path encoding"); }
+  try { decoded = decodeURIComponent(encoded); } catch { throw new Error("Encodage du chemin média invalide"); }
   const candidate = assertInside(serverDataDir(), decoded);
   const canonical = await realpath(candidate);
   return assertInside(serverDataDir(), canonical);
@@ -111,7 +120,7 @@ async function serveMedia(request: IncomingMessage, res: ServerResponse, url: UR
   const encoded = raw.startsWith("view/") ? raw.split("/").slice(2).join("/") : raw;
   const path = await mediaPath(encoded);
   const info = await stat(path);
-  if (!info.isFile()) throw new Error("Media not found");
+  if (!info.isFile()) throw new Error("Média introuvable");
   const contentType = MEDIA_TYPES[extname(path).toLowerCase()] || "application/octet-stream";
   const range = request.headers.range;
   let start = 0;
@@ -180,13 +189,13 @@ const server = createServer(async (request, res) => {
     if ((request.method === "GET" || request.method === "HEAD") && url.pathname.startsWith("/api/media/")) { await serveMedia(request, res, url); return; }
     if (request.method !== "POST" && request.method !== "DELETE") {
       if (request.method === "GET" && await serveStatic(res, url.pathname)) return;
-      json(res, 404, { error: "Not found" }); return;
+      json(res, 404, { error: "Ressource introuvable" }); return;
     }
-    if (!mutationAllowed(request)) { json(res, 403, { error: "Cross-site requests are not allowed" }); return; }
+    if (!mutationAllowed(request)) { json(res, 403, { error: "Les requêtes intersites ne sont pas autorisées" }); return; }
     if (request.method === "POST" && url.pathname === "/api/upload") { json(res, 201, await upload(request, url)); return; }
     if (request.method === "POST" && url.pathname === "/api/rpc") {
       const body = await bodyJson(request);
-      if (typeof body.method !== "string" || !Array.isArray(body.args) || body.args.length > 24) throw new Error("Invalid RPC request");
+      if (typeof body.method !== "string" || !Array.isArray(body.args) || body.args.length > 24) throw new Error("Requête RPC invalide");
       json(res, 200, { result: await service.invoke(body.method, body.args) }); return;
     }
     if (request.method === "POST" && url.pathname === "/api/recap") {
@@ -197,7 +206,7 @@ const server = createServer(async (request, res) => {
     if (request.method === "POST" && cancel) {
       await jobs.load(); json(res, 200, { cancelled: await jobs.cancel(cancel[1]) }); return;
     }
-    json(res, 404, { error: "Not found" });
+    json(res, 404, { error: "Ressource introuvable" });
   } catch (error) {
     if (!res.headersSent) errorResponse(res, error); else res.destroy();
   }
@@ -210,13 +219,13 @@ const host = process.env.VIRALHIT_HOST || "127.0.0.1";
 async function bootstrap(): Promise<void> {
   await jobs.load();
   server.listen(port, host, () => {
-    console.log(`Viral Hit local server listening on http://${host}:${port}`);
-    console.log(`Data directory: ${serverDataDir()}`);
-    if (existsSync(resolve(serverRoot(), "dist", "renderer", "index.html"))) console.log("Serving the production browser UI");
+    console.log(`Serveur local Viral Hit à l’écoute sur http://${host}:${port}`);
+    console.log(`Dossier des données : ${serverDataDir()}`);
+    if (existsSync(resolve(serverRoot(), "dist", "renderer", "index.html"))) console.log("Interface navigateur de production disponible");
   });
 }
 void bootstrap().catch((error) => {
-  console.error("Viral Hit server failed to start", error);
+  console.error("Échec du démarrage du serveur Viral Hit", localizeErrorMessage(error));
   process.exitCode = 1;
 });
 

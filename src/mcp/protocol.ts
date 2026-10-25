@@ -9,6 +9,7 @@
  */
 
 import { describeSubtitleImportError } from "../shared/subtitle-import";
+import { localizeErrorMessage } from "../shared/french-errors";
 
 /** MCP 协议版本(2024-11-05 基线,客户端普遍兼容)。 */
 export const MCP_PROTOCOL_VERSION = "2024-11-05";
@@ -33,22 +34,22 @@ export const MCP_TOOLS: McpToolDef[] = [
   {
     name: "clip_video",
     description:
-      "全托管切片:把一个本地长视频(播客/直播回放/课程)转写、AI 找爆点并导出为可发布的竖屏短视频(烧字幕/跳剪/表情信号),返回输出目录与每条切片的标题/评分/时间码。未提供 subtitlePath 时,首次运行会自动下载本地 ASR 模型。需要环境变量 HOTCLIP_LLM_BASE_URL/HOTCLIP_LLM_MODEL(以及非本地端点的 HOTCLIP_LLM_API_KEY)。",
+      "Parcours autonome et gratuit : transcrit une longue vidéo locale, détecte les moments forts et exporte des clips verticaux prêts à publier. Retourne le dossier de sortie, les titres, scores et timecodes. Sans subtitlePath, le modèle Whisper français est téléchargé au premier usage. Aucun jeton n’est requis avec le moteur intégré ; Ollama reste une option locale explicite.",
     inputSchema: {
       type: "object",
       properties: {
-        videoPath: { type: "string", description: "本地视频文件的绝对路径" },
-        engineId: { type: "string", enum: ["sensevoice", "paraformer", "fireredasr", "qwen3"], description: "本地 ASR 引擎，默认 sensevoice；qwen3 需要单独启动本地语音服务。" },
-        localServiceUrl: { type: "string", description: "Qwen3 本地服务地址，仅 127.0.0.1 / ::1，默认 http://127.0.0.1:8766。" },
-        restart: { type: "boolean", description: "重新转写，不复用本次素材的当前引擎分段进度；默认自动续跑。" },
-        subtitlePath: { type: "string", description: "可选:与当前素材对齐的 UTF-8 SRT/WebVTT 单轨原文字幕绝对路径(最大 5 MB、无重叠)。跳过 ASR,保留原句时间;句内字词时间为估算,需复核。" },
-        maxClips: { type: "number", description: "最多导出几条(1-12,默认 6)" },
-        vertical: { type: "boolean", description: "竖屏 9:16 输出(默认 true)" },
-        captions: { type: "boolean", description: "烧录动态字幕(默认 true)" },
-        autoEnhance: { type: "boolean", description: "本地测量最终保留画面并克制修正明显偏暗/灰/过饱和素材(默认 false;不下载模型)" },
-        denoiseMode: { type: "string", enum: ["basic", "smart"], description: "可选音频清理:basic 固定滤镜;smart 48kHz 本地人声模型(失败自动回退 basic)" },
-        outDir: { type: "string", description: "输出目录(默认源视频旁 <名>-hotclip/)" },
-        referencePath: { type: "string", description: "对标爆款视频的本地路径(可选):实测其时长/语速/句长/镜头频率/钩子形态,选段向对标节奏靠拢(偏好不是硬约束);分析失败按无参考继续" },
+        videoPath: { type: "string", description: "Chemin absolu de la vidéo locale" },
+        engineId: { type: "string", enum: ["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"], description: "Moteur ASR local : whisper-fr par défaut pour le français ; qwen3 nécessite son service local optionnel." },
+        localServiceUrl: { type: "string", description: "Adresse du service Qwen3 local facultatif, uniquement sur 127.0.0.1 ou ::1 ; http://127.0.0.1:8766 par défaut." },
+        restart: { type: "boolean", description: "Recommence la transcription sans réutiliser la progression du moteur actuel ; la reprise est activée par défaut." },
+        subtitlePath: { type: "string", description: "Chemin absolu facultatif de sous-titres SRT/WebVTT UTF-8 alignés sur le média (5 Mo maximum, une piste, sans chevauchement). Ignore l’ASR ; les temps des mots dans les phrases sont estimés et doivent être vérifiés." },
+        maxClips: { type: "number", description: "Nombre maximal de clips à exporter (1 à 12 ; 6 par défaut)" },
+        vertical: { type: "boolean", description: "Export vertical 9:16 (true par défaut)" },
+        captions: { type: "boolean", description: "Incruste les sous-titres dynamiques (true par défaut)" },
+        autoEnhance: { type: "boolean", description: "Mesure localement les images conservées et corrige avec modération les sources trop sombres, ternes ou saturées (false par défaut ; aucun modèle supplémentaire)" },
+        denoiseMode: { type: "string", enum: ["basic", "smart"], description: "Nettoyage audio facultatif : basic pour le filtre fixe, smart pour la voix locale 48 kHz avec repli automatique sur basic" },
+        outDir: { type: "string", description: "Dossier de sortie (par défaut, à côté de la source dans <nom>-hotclip/)" },
+        referencePath: { type: "string", description: "Vidéo locale de référence facultative : mesure sa durée, son débit, ses phrases, ses plans et son accroche pour guider la sélection sans contrainte absolue ; en cas d’échec, continue sans référence" },
       },
       required: ["videoPath"],
     },
@@ -56,17 +57,17 @@ export const MCP_TOOLS: McpToolDef[] = [
   {
     name: "detect_highlights",
     description:
-      "只找爆点不出片:转写并用 LLM 挑出爆点候选,返回每条的时间码/标题/钩子/评分/理由/AI复评意见 JSON。适合先审后剪的流程。需要 HOTCLIP_LLM_* 环境变量。",
+      "Détecte les moments forts sans exporter : transcription puis sélection locale gratuite, avec timecodes, titres, accroches, scores et raisons en JSON. Aucun jeton n’est requis avec le moteur intégré.",
     inputSchema: {
       type: "object",
       properties: {
-        videoPath: { type: "string", description: "本地视频文件的绝对路径" },
-        engineId: { type: "string", enum: ["sensevoice", "paraformer", "fireredasr", "qwen3"], description: "本地 ASR 引擎，默认 sensevoice；qwen3 需要单独启动本地语音服务。" },
-        localServiceUrl: { type: "string", description: "Qwen3 本地服务地址，仅 127.0.0.1 / ::1，默认 http://127.0.0.1:8766。" },
-        restart: { type: "boolean", description: "重新转写，不复用本次素材的当前引擎分段进度；默认自动续跑。" },
-        subtitlePath: { type: "string", description: "可选:与当前素材对齐的 UTF-8 SRT/WebVTT 单轨原文字幕绝对路径(最大 5 MB、无重叠)。跳过 ASR,保留原句时间;句内字词时间为估算,需复核。" },
-        maxClips: { type: "number", description: "最多几条候选(1-12,默认 6)" },
-        referencePath: { type: "string", description: "对标爆款视频的本地路径(可选):实测其节奏画像,候选向对标节奏靠拢;分析失败按无参考继续" },
+        videoPath: { type: "string", description: "Chemin absolu de la vidéo locale" },
+        engineId: { type: "string", enum: ["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"], description: "Moteur ASR local : whisper-fr par défaut pour le français ; qwen3 nécessite son service local optionnel." },
+        localServiceUrl: { type: "string", description: "Adresse du service Qwen3 local facultatif, uniquement sur 127.0.0.1 ou ::1 ; http://127.0.0.1:8766 par défaut." },
+        restart: { type: "boolean", description: "Recommence la transcription sans réutiliser la progression du moteur actuel ; la reprise est activée par défaut." },
+        subtitlePath: { type: "string", description: "Chemin absolu facultatif de sous-titres SRT/WebVTT UTF-8 alignés sur le média (5 Mo maximum, une piste, sans chevauchement). Ignore l’ASR ; les temps des mots dans les phrases sont estimés et doivent être vérifiés." },
+        maxClips: { type: "number", description: "Nombre maximal de candidats (1 à 12 ; 6 par défaut)" },
+        referencePath: { type: "string", description: "Vidéo locale de référence facultative dont le rythme guide les candidats ; en cas d’échec, continue sans référence" },
       },
       required: ["videoPath"],
     },
@@ -74,45 +75,45 @@ export const MCP_TOOLS: McpToolDef[] = [
   {
     name: "transcribe_video",
     description:
-      "字幕接入或本地转写:提供 subtitlePath 时导入已有字幕并估算字词时间;否则用端侧 ASR(SenseVoice,首次自动下载)把视频/音频转成带时间戳的逐句稿。结果有缓存,同一文件二次调用秒回。不需要 LLM 配置。",
+      "Importe des sous-titres ou transcrit localement en français avec Whisper par défaut. Les résultats sont mis en cache et les fenêtres terminées peuvent être reprises. Aucune configuration IA ni clé payante n’est nécessaire.",
     inputSchema: {
       type: "object",
       properties: {
-        videoPath: { type: "string", description: "本地视频/音频文件的绝对路径" },
-        engineId: { type: "string", enum: ["sensevoice", "paraformer", "fireredasr", "qwen3"], description: "本地 ASR 引擎，默认 sensevoice；qwen3 需要单独启动本地语音服务。" },
-        localServiceUrl: { type: "string", description: "Qwen3 本地服务地址，仅 127.0.0.1 / ::1，默认 http://127.0.0.1:8766。" },
-        restart: { type: "boolean", description: "重新转写，不复用本次素材的当前引擎分段进度；默认自动续跑。" },
-        subtitlePath: { type: "string", description: "可选:导入已有 UTF-8 SRT/WebVTT 原文字幕,跳过 ASR(最大 5 MB、无重叠)。句内字词时间为估算,需复核。" },
+        videoPath: { type: "string", description: "Chemin absolu du fichier vidéo ou audio local" },
+        engineId: { type: "string", enum: ["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"], description: "Moteur ASR local : whisper-fr par défaut pour le français ; qwen3 nécessite son service local optionnel." },
+        localServiceUrl: { type: "string", description: "Adresse du service Qwen3 local facultatif, uniquement sur 127.0.0.1 ou ::1 ; http://127.0.0.1:8766 par défaut." },
+        restart: { type: "boolean", description: "Recommence la transcription sans réutiliser la progression du moteur actuel ; la reprise est activée par défaut." },
+        subtitlePath: { type: "string", description: "Sous-titres SRT/WebVTT UTF-8 facultatifs permettant d’ignorer l’ASR (5 Mo maximum, sans chevauchement) ; les temps internes sont estimés et doivent être vérifiés." },
       },
       required: ["videoPath"],
     },
   },
   {
     name: "recap_video",
-    description: "Start an autonomous narrated video recap. The agent plans from timing evidence, resumes deterministic pipeline pauses, renders and runs final QC. Returns a durable job id; use production_jobs to poll. Requires VIRALHIT_LLM_* and the selected recap ASR/VLM/TTS environment configuration.",
+    description: "Démarre un récapitulatif vidéo narré autonome. L’agent planifie à partir de preuves temporelles, reprend les étapes déterministes, effectue le rendu et le contrôle final. Retourne un identifiant durable à surveiller avec production_jobs. Le parcours local complet ASR/VLM/TTS doit être configuré ; aucun service payant n’est appelé par défaut.",
     inputSchema: {
       type: "object",
       properties: {
-        videos: { type: "array", items: { type: "string" }, description: "One to forty absolute local media paths; multiple sources require editMode=cut" },
-        workDir: { type: "string", description: "Optional resumable run directory" },
+        videos: { type: "array", items: { type: "string" }, description: "Un à quarante chemins médias locaux absolus ; plusieurs sources exigent editMode=cut" },
+        workDir: { type: "string", description: "Dossier de travail facultatif permettant la reprise" },
         editMode: { type: "string", enum: ["full", "cut", "dub"] },
         audioMode: { type: "string", enum: ["narration", "source-mix", "adopted-packet-copy"] },
         style: { type: "string" }, language: { type: "string" }, context: { type: "string" }, targetDuration: { type: "string" },
         outputDir: { type: "string" }, skipAsr: { type: "boolean" }, burnSubtitles: { type: "boolean" },
-        confirmVoiceRights: { type: "boolean", description: "Required for dub: confirms media and speaker-cloning rights" },
+        confirmVoiceRights: { type: "boolean", description: "Obligatoire pour dub : confirme les droits sur le média et le clonage de la voix" },
       },
       required: ["videos"],
     },
   },
   {
     name: "production_jobs",
-    description: "List durable recap production jobs and their status, output, work directory and safe error summary.",
+    description: "Liste les productions durables, leur état, leur sortie, leur dossier de travail et un résumé d’erreur sécurisé.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "cancel_production_job",
-    description: "Cancel a running recap job. Completed artefacts remain in its work directory for a later resume.",
-    inputSchema: { type: "object", properties: { id: { type: "string", description: "Job id returned by recap_video" } }, required: ["id"] },
+    description: "Annule une production en cours. Les artefacts terminés restent dans son dossier de travail pour une reprise ultérieure.",
+    inputSchema: { type: "object", properties: { id: { type: "string", description: "Identifiant de production retourné par recap_video" } }, required: ["id"] },
   },
 ];
 
@@ -120,18 +121,18 @@ export const MCP_TOOLS: McpToolDef[] = [
 export function validateToolArgs(tool: McpToolDef, args: Record<string, unknown>): string | null {
   const schema = tool.inputSchema as { properties?: Record<string, { type?: string; enum?: unknown[] }>; required?: string[] };
   for (const key of schema.required ?? []) {
-    if (args[key] === undefined || args[key] === null || args[key] === "") return `缺少必填参数 ${key}`;
+    if (args[key] === undefined || args[key] === null || args[key] === "") return `Paramètre obligatoire manquant : ${key}`;
   }
   for (const [key, value] of Object.entries(args)) {
     const spec = schema.properties?.[key];
     if (!spec?.type || value === undefined) continue;
     const actual = typeof value;
-    if (spec.type === "number" && actual !== "number") return `参数 ${key} 应为 number`;
-    if (spec.type === "string" && actual !== "string") return `参数 ${key} 应为 string`;
-    if (spec.type === "boolean" && actual !== "boolean") return `参数 ${key} 应为 boolean`;
-    if (spec.type === "array" && !Array.isArray(value)) return `参数 ${key} 应为 array`;
-    if (spec.type === "array" && Array.isArray(value) && value.some((item) => typeof item !== "string")) return `参数 ${key} 应为 string array`;
-    if (spec.enum && !spec.enum.includes(value)) return `参数 ${key} 应为 ${spec.enum.join("|")}`;
+    if (spec.type === "number" && actual !== "number") return `Le paramètre ${key} doit être de type number`;
+    if (spec.type === "string" && actual !== "string") return `Le paramètre ${key} doit être de type string`;
+    if (spec.type === "boolean" && actual !== "boolean") return `Le paramètre ${key} doit être de type boolean`;
+    if (spec.type === "array" && !Array.isArray(value)) return `Le paramètre ${key} doit être un tableau`;
+    if (spec.type === "array" && Array.isArray(value) && value.some((item) => typeof item !== "string")) return `Le paramètre ${key} doit être un tableau de chaînes`;
+    if (spec.enum && !spec.enum.includes(value)) return `Le paramètre ${key} doit valoir ${spec.enum.join(" ou ")}`;
   }
   return null;
 }
@@ -175,16 +176,16 @@ export async function handleMcpMessage(
       const name = String(msg.params?.name ?? "");
       const args = (msg.params?.arguments ?? {}) as Record<string, unknown>;
       const tool = MCP_TOOLS.find((t) => t.name === name);
-      if (!tool) return result(msg.id, toolText(`未知工具: ${name}`, true));
+      if (!tool) return result(msg.id, toolText(`Outil inconnu : ${name}`, true));
       const invalid = validateToolArgs(tool, args);
       if (invalid) return result(msg.id, toolText(invalid, true));
       try {
         return result(msg.id, toolText(await execute(name, args)));
       } catch (e) {
-        return result(msg.id, toolText(describeSubtitleImportError(e), true));
+        return result(msg.id, toolText(localizeErrorMessage(describeSubtitleImportError(e)), true));
       }
     }
     default:
-      return rpcError(msg.id, -32601, `method not found: ${method}`);
+      return rpcError(msg.id, -32601, `Méthode introuvable : ${method}`);
   }
 }

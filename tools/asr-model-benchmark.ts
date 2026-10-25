@@ -5,6 +5,7 @@ import { performance } from "perf_hooks";
 import { matchingCharacters } from "../src/shared/speech-text";
 import { QwenLocalEngine, qwenHealth } from "../src/core/transcribe/qwen-local";
 import { SenseVoiceEngine } from "../src/core/transcribe/sensevoice";
+import { WhisperFrenchEngine } from "../src/core/transcribe/whisper";
 import { ParaformerEngine } from "../src/core/transcribe/paraformer";
 import { FireRedEngine } from "../src/core/transcribe/firered";
 
@@ -20,15 +21,15 @@ function distance(a: string[], b: string[]): number {
 
 async function main(): Promise<void> {
   const manifest = process.argv[2];
-  if (!manifest) throw new Error("Usage: pnpm quality:eval:asr <fixtures.json> [sensevoice,qwen3]");
+  if (!manifest) throw new Error("Usage: pnpm quality:eval:asr <fixtures.json> [whisper-fr,sensevoice,qwen3]");
   const cases = JSON.parse(await readFile(manifest, "utf8")) as Array<{ id: string; audio: string; text: string; boundaries?: { firstSec: number; lastSec: number } }>;
   if (!Array.isArray(cases) || !cases.length || cases.length > 50 || cases.some((c) => !c.audio || typeof c.text !== "string" || c.text.length > 4000)) throw new Error("Invalid fixture manifest");
   const modelsRoot = resolve(process.env.HOTCLIP_MODELS_DIR || "models");
   const url = process.env.HOTCLIP_QWEN_URL || "http://127.0.0.1:8766";
-  const ids = (process.argv[3] || "sensevoice,qwen3").split(",");
+  const ids = (process.argv[3] || "whisper-fr").split(",");
   const results = [];
   for (const id of ids) {
-    const engine = id === "qwen3" ? new QwenLocalEngine(url) : id === "sensevoice" ? new SenseVoiceEngine(modelsRoot) : id === "paraformer" ? new ParaformerEngine(modelsRoot) : id === "fireredasr" ? new FireRedEngine(modelsRoot) : null;
+    const engine = id === "qwen3" ? new QwenLocalEngine(url) : id === "whisper-fr" ? new WhisperFrenchEngine(modelsRoot) : id === "sensevoice" ? new SenseVoiceEngine(modelsRoot) : id === "paraformer" ? new ParaformerEngine(modelsRoot) : id === "fireredasr" ? new FireRedEngine(modelsRoot) : null;
     if (!engine) throw new Error(`Unknown local engine ${id}`);
     const model = id === "qwen3" ? await qwenHealth(url).catch(() => null) : null;
     for (const fixture of cases) {

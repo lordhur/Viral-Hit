@@ -87,6 +87,10 @@ describe("parseTranscribeError", () => {
     expect(parseTranscribeError("plain failure")).toEqual({ kind: "generic", detail: "plain failure" });
   });
 
+  it("Qwen local failures get their own actionable category", () => {
+    expect(parseTranscribeError("qwen:unavailable")).toEqual({ kind: "local-service", detail: "qwen:unavailable" });
+  });
+
   it("与 tagTranscribeError 互逆:标记往返后归因与细节都不丢", () => {
     const tagged = tagTranscribeError("ffmpeg exited with code 1", { hasAudio: false });
     const parsed = parseTranscribeError(`Error invoking remote method 'hotclip:transcribe': Error: ${tagged}`);

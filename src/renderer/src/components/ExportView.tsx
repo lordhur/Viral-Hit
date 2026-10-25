@@ -9,6 +9,7 @@ import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { exportProgressPercent } from "../../../shared/export-progress";
 import { exportNeedsTranscript } from "../../../shared/export-transcript";
+import { errorText } from "../i18n/errors";
 import type {
   HighlightCandidate,
   ExportedClip,
@@ -69,7 +70,7 @@ export function ExportView({
         transcript: exportNeedsTranscript(options) ? transcript : undefined,
       })
       .then((value) => { if (id === requestId.current) setResults(value); })
-      .catch((e) => { if (id === requestId.current) setError(e instanceof Error ? e.message : String(e)); })
+      .catch((e) => { if (id === requestId.current) setError(errorText(e)); })
       .finally(() => {
         unsubscribe();
         if (id === requestId.current) { running.current = false; setCancelling(false); }

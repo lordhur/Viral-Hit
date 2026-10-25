@@ -10,7 +10,7 @@ describe("listModels 请求边界", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream({ cancel }))));
     const pending = listModels("http://[::1]:11434/v1", "");
     await vi.advanceTimersByTimeAsync(MODEL_LIST_TIMEOUT_MS);
-    expect(await pending).toEqual({ ids: [], error: expect.stringContaining("超时") });
+    expect(await pending).toEqual({ ids: [], error: expect.stringContaining("délai de réponse") });
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -25,7 +25,7 @@ describe("listModels 请求边界", () => {
   it("响应头声明过大的模型列表时关闭流并允许手填", async () => {
     const cancel = vi.fn();
     vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream({ cancel }), { headers: { "content-length": "9000000" } })));
-    expect(await listModels("http://127.0.0.1:11434/v1", "")).toEqual({ ids: [], error: expect.stringContaining("响应过大") });
+    expect(await listModels("http://127.0.0.1:11434/v1", "")).toEqual({ ids: [], error: expect.stringContaining("trop volumineuse") });
     expect(cancel).toHaveBeenCalledTimes(1);
   });
 });

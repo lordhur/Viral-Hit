@@ -13,6 +13,7 @@ import {
   isModelInstalled,
   modelDir,
   SENSEVOICE_MODEL,
+  WHISPER_FR_MODEL,
   PARAFORMER_MODEL,
   FIRERED_MODEL,
   YUNET_MODEL,
@@ -28,6 +29,7 @@ import {
 
 /** 全部可下载模型,按用户能理解的用途分组标签(界面直接展示这个顺序)。 */
 export const MODEL_CATALOG: Array<{ asset: ModelAsset; useKey: string }> = [
+  { asset: WHISPER_FR_MODEL, useKey: "useAsrFrench" },
   { asset: SENSEVOICE_MODEL, useKey: "useAsrFast" },
   { asset: PARAFORMER_MODEL, useKey: "useAsrAccurate" },
   { asset: FIRERED_MODEL, useKey: "useAsrDialect" },
@@ -122,7 +124,7 @@ export async function moveModelsDir(from: string, to: string): Promise<string> {
   const src = resolve(from);
   const dest = resolve(to);
   if (src === dest) return dest;
-  if (isInside(src, dest)) throw new Error("目标目录在当前模型目录内部,请换一个位置");
+  if (isInside(src, dest)) throw new Error("Le dossier de destination se trouve dans le dossier de modèles actuel ; choisissez un autre emplacement");
 
   const srcExists = await stat(src).then((s) => s.isDirectory()).catch(() => false);
   await mkdir(dest, { recursive: true });
@@ -132,7 +134,7 @@ export async function moveModelsDir(from: string, to: string): Promise<string> {
   if (names.length === 0) return dest;
 
   // 目标非空时不冒险合并——让用户自己挑个干净目录,免得同名模型互相覆盖
-  if ((await readdir(dest)).length > 0) throw new Error("目标目录不是空的,请选一个空文件夹");
+  if ((await readdir(dest)).length > 0) throw new Error("Le dossier de destination n’est pas vide ; choisissez un dossier vide");
 
   try {
     await rename(src, dest);
@@ -147,11 +149,11 @@ export async function moveModelsDir(from: string, to: string): Promise<string> {
     }
     // 复制完整性粗校验:总字节对不上就当没搬成
     const [srcBytes, destBytes] = [await dirSize(src), await dirSize(dest)];
-    if (destBytes < srcBytes) throw new Error("复制不完整");
+    if (destBytes < srcBytes) throw new Error("La copie des modèles est incomplète");
     await rm(src, { recursive: true, force: true });
     return dest;
   } catch (e) {
     await rm(dest, { recursive: true, force: true }).catch(() => {});
-    throw new Error(`模型搬家失败,原目录未改动:${e instanceof Error ? e.message : String(e)}`);
+    throw new Error("Le déplacement des modèles a échoué ; le dossier d’origine n’a pas été modifié. Vérifiez l’espace disque et les autorisations.");
   }
 }

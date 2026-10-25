@@ -55,7 +55,7 @@ export function GlossaryModal({ onClose }: { onClose: () => void }): React.JSX.E
             <LuBookOpen className="h-5 w-5 text-ember" />
             {t("title")}
           </h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-mut transition-colors hover:text-fg" aria-label="close">
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-mut transition-colors hover:text-fg" aria-label="Fermer">
             <LuX className="h-4.5 w-4.5" />
           </button>
         </div>

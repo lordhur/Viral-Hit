@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { LuCheck, LuChevronDown, LuScissorsLineDashed, LuBookmark, LuTextSelect, LuTriangleAlert, LuBan } from "react-icons/lu";
 import { useT } from "../../i18n/store";
+import { gateNoteText } from "../../i18n/errors";
 import { clipDurationSec, isStitched } from "../../../../shared/pieces";
 import type { HighlightCandidate } from "../../../../shared/api-types";
 
@@ -117,12 +118,12 @@ export function CandidateTable({
               </span>
               <span className="w-[52px] shrink-0">
                 {isDrop ? (
-                  <span title={(c.gateNotes ?? []).join(";") || undefined} className="inline-flex items-center gap-0.5 text-[9.5px] font-bold text-red-400/80">
+                  <span title={(c.gateNotes ?? []).map(gateNoteText).join(";") || undefined} className="inline-flex items-center gap-0.5 text-[9.5px] font-bold text-red-400/80">
                     <LuBan className="h-2.5 w-2.5" />
                     {th("gateDropChip")}
                   </span>
                 ) : c.gate === "review" ? (
-                  <span title={(c.gateNotes ?? []).join(";") || undefined} className="inline-flex items-center gap-0.5 text-[9.5px] font-bold text-amber-400">
+                  <span title={(c.gateNotes ?? []).map(gateNoteText).join(";") || undefined} className="inline-flex items-center gap-0.5 text-[9.5px] font-bold text-amber-400">
                     <LuTriangleAlert className="h-2.5 w-2.5" />
                     {th("gateReviewChip")}
                   </span>

@@ -28,7 +28,7 @@ export function ytDlpAsset(platform = process.platform, arch = process.arch): st
   if (platform === "win32") return "yt-dlp.exe";
   if (platform === "linux" && arch === "x64") return "yt-dlp_linux";
   if (platform === "linux" && arch === "arm64") return "yt-dlp_linux_aarch64";
-  throw new Error(`URL import is not available on ${platform}/${arch}`);
+  throw new Error(`url:unsupported-platform ${platform}/${arch}`);
 }
 
 function isPrivateIpv4(host: string): boolean {
@@ -51,22 +51,22 @@ function isPrivateIpv6(host: string): boolean {
 /** Accept only ordinary public HTTP(S) URLs; never pass file/custom schemes or local endpoints to yt-dlp. */
 export function validateMediaUrl(input: string): string {
   const raw = input.trim();
-  if (!raw) throw new Error("Enter a video URL");
+  if (!raw) throw new Error("url:invalid");
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    throw new Error("Invalid video URL");
+    throw new Error("url:invalid");
   }
-  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Only HTTP(S) video URLs are supported");
-  if (url.username || url.password) throw new Error("Video URLs containing credentials are not supported");
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("url:http-required");
+  if (url.username || url.password) throw new Error("url:credentials");
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) {
-    throw new Error("Local network video URLs are not supported");
+    throw new Error("url:local");
   }
   const family = isIP(host);
   if ((family === 4 && isPrivateIpv4(host)) || (family === 6 && isPrivateIpv6(host))) {
-    throw new Error("Local network video URLs are not supported");
+    throw new Error("url:local");
   }
   return url.toString();
 }
@@ -92,12 +92,12 @@ export function checksumForAsset(manifest: string, asset: string): string {
     const match = line.trim().match(/^([a-fA-F0-9]{64})\s+\*?(.+)$/);
     if (match && basename(match[2]) === asset) return match[1].toLowerCase();
   }
-  throw new Error(`yt-dlp checksum is missing for ${asset}`);
+  throw new Error(`url:tool-integrity checksum missing for ${asset}`);
 }
 
 async function fetchChecked(fetchImpl: typeof fetch, url: string, signal?: AbortSignal): Promise<Response> {
   const response = await fetchImpl(url, { redirect: "follow", signal });
-  if (!response.ok) throw new Error(`yt-dlp download failed (HTTP ${response.status})`);
+  if (!response.ok) throw new Error(`url:tool-download HTTP ${response.status}`);
   return response;
 }
 
@@ -107,7 +107,7 @@ async function downloadFile(
   onProgress?: (downloaded: number, total?: number) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  if (!response.body) throw new Error("yt-dlp download returned an empty body");
+  if (!response.body) throw new Error("url:tool-download empty response body");
   const totalHeader = Number(response.headers.get("content-length"));
   const total = Number.isFinite(totalHeader) && totalHeader > 0 ? totalHeader : undefined;
   const handle = await open(path, "w");
@@ -126,7 +126,7 @@ async function downloadFile(
     await reader.cancel().catch(() => {});
     await handle.close();
   }
-  if (downloaded === 0) throw new Error("yt-dlp download returned an empty file");
+  if (downloaded === 0) throw new Error("url:tool-download empty file");
 }
 
 export async function ensureYtDlp(opts: UrlImportOptions): Promise<string> {
@@ -169,7 +169,7 @@ export async function ensureYtDlp(opts: UrlImportOptions): Promise<string> {
       opts.signal
     );
     const actual = await sha256(tempPath);
-    if (actual !== expected) throw new Error("yt-dlp checksum verification failed");
+    if (actual !== expected) throw new Error("url:tool-integrity checksum verification failed");
     if (process.platform !== "win32") await chmod(tempPath, 0o755);
     await rename(tempPath, binaryPath);
     await writeFile(checksumPath, `${expected}\n`, "utf8");
@@ -254,25 +254,25 @@ export async function importMediaUrl(input: string, opts: UrlImportOptions): Pro
   opts.signal?.addEventListener("abort", abort, { once: true });
   try {
     await new Promise<void>((resolveClose, rejectClose) => {
-      child.once("error", rejectClose);
+      child.once("error", () => rejectClose(new Error("url:tool-run")));
       child.once("close", (code) => {
         consume("\n");
         if (opts.signal?.aborted) rejectClose(new DOMException("Aborted", "AbortError"));
         else if (code === 0) resolveClose();
-        else rejectClose(new Error((tail.trim() || `yt-dlp exited with code ${code}`).replaceAll(url, "<URL>")));
+        else rejectClose(new Error(`url:download ${(tail.trim() || `yt-dlp exited with code ${code}`).replaceAll(url, "<URL>")}`));
       });
     });
   } finally {
     opts.signal?.removeEventListener("abort", abort);
   }
 
-  if (!outputPath) throw new Error("yt-dlp finished without returning a media path");
+  if (!outputPath) throw new Error("url:invalid-download missing media path");
   const absolute = resolve(outputPath);
   const root = resolve(opts.destDir);
   const within = relative(root, absolute);
-  if (!within || within.startsWith(`..${sep}`) || within === "..") throw new Error("yt-dlp returned an unsafe media path");
+  if (!within || within.startsWith(`..${sep}`) || within === "..") throw new Error("url:invalid-download unsafe media path");
   const info = await stat(absolute);
-  if (!info.isFile() || info.size === 0) throw new Error("Downloaded media file is empty");
+  if (!info.isFile() || info.size === 0) throw new Error("url:invalid-download empty media file");
   opts.onProgress?.({ stage: "done", fraction: 1 });
   return { filePath: absolute };
 }

@@ -71,7 +71,7 @@ import { sanitizeBrand } from "../core/brand";
 import { runDoctor } from "../core/doctor";
 import { clearRenderCache } from "../core/render-cache";
 import { clearEvidenceIndex } from "../core/evidence-index";
-import { ensureModel, isModelInstalled, FIRERED_MODEL, PARAFORMER_MODEL, SENSEVOICE_MODEL } from "../core/models";
+import { ensureModel, isModelInstalled, FIRERED_MODEL, PARAFORMER_MODEL, SENSEVOICE_MODEL, WHISPER_FR_MODEL } from "../core/models";
 import { inspectModels, moveModelsDir } from "../core/models-inventory";
 import { defaultModelsRoot, readAppSettings, writeAppSettings } from "../core/app-settings";
 import { qwenHealth } from "../core/transcribe/qwen-local";
@@ -79,18 +79,19 @@ import { generateAiBgm } from "../core/bgm-ai";
 import { previewTranscriptAlignment } from "../core/transcript-alignment";
 import { assertInside, defaultExportDir, serverDataDir, serverRoot } from "./config";
 import type { EventHub } from "./events";
+import { localizeErrorMessage, localizeUrlImportError } from "../shared/french-errors";
 
-const ASR_ASSETS = { sensevoice: SENSEVOICE_MODEL, paraformer: PARAFORMER_MODEL, fireredasr: FIRERED_MODEL } as const;
+const ASR_ASSETS = { "whisper-fr": WHISPER_FR_MODEL, sensevoice: SENSEVOICE_MODEL, paraformer: PARAFORMER_MODEL, fireredasr: FIRERED_MODEL } as const;
 
 function stringArg(value: unknown, label: string): string {
-  if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required`);
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${label} : valeur obligatoire`);
   return value;
 }
 
 function llmArg(value: unknown): LlmConfig {
   const config = value as LlmConfig;
   if (!config || typeof config.baseUrl !== "string" || !config.baseUrl.trim() || typeof config.model !== "string" || !config.model.trim()) {
-    throw new Error("Configure an LLM provider, base URL and model first");
+    throw new Error("Configurez d’abord un fournisseur IA, son URL de base et son modèle, ou utilisez le moteur gratuit intégré");
   }
   return {
     baseUrl: config.baseUrl.trim(),
@@ -119,7 +120,7 @@ export class LocalService {
   private managed(path: string): string { return assertInside(this.data(), path); }
 
   private async media(path: unknown): Promise<string> {
-    return this.managed(stringArg(path, "A source path"));
+    return this.managed(stringArg(path, "Chemin source"));
   }
 
   private async warmSignals(filePath: string): Promise<any> {
@@ -136,10 +137,10 @@ export class LocalService {
   }
 
   private async transcribe(filePath: string, engineId: unknown, _apiKey: unknown, options: SpeechRunOptions = {}): Promise<Transcript> {
-    if (this.transcribeAbort || this.alignmentAbort) throw new Error("speech:busy");
+    if (this.transcribeAbort || this.alignmentAbort) throw new Error("Une transcription ou un alignement est déjà en cours");
     const source = await this.media(filePath);
-    const selected = typeof engineId === "string" ? engineId : "sensevoice";
-    if (selected === "elevenlabs") throw new Error("ElevenLabs transcription is available in the desktop interface; use a local engine in the browser");
+    const selected = typeof engineId === "string" ? engineId : "whisper-fr";
+    if (selected === "elevenlabs") throw new Error("La transcription ElevenLabs est réservée à l’application de bureau ; utilisez un moteur local gratuit dans le navigateur");
     const abort = new AbortController();
     this.transcribeAbort = abort;
     try {
@@ -158,10 +159,10 @@ export class LocalService {
   private async detect(args: unknown[]): Promise<unknown> {
     let transcript = args[0] as Transcript;
     const llm = llmArg(args[1]);
-    if (!transcript || !Array.isArray(transcript.segments)) throw new Error("A transcript is required");
+    if (!transcript || !Array.isArray(transcript.segments)) throw new Error("Une transcription est requise");
     const filePath = typeof args[2] === "string" && args[2] ? await this.media(args[2]) : undefined;
     const diarize = args[3] === true;
-    if (diarize) throw new Error("Speaker separation currently requires the desktop interface");
+    if (diarize) throw new Error("La séparation des intervenants nécessite actuellement l’application de bureau");
     const pf = args[4] as { baseUrl?: unknown; model?: unknown } | null | undefined;
     const prefilter = pf && typeof pf.baseUrl === "string" && typeof pf.model === "string" && pf.baseUrl && pf.model
       ? { baseUrl: pf.baseUrl, model: pf.model } : null;
@@ -240,13 +241,13 @@ export class LocalService {
   private async export(filePath: unknown, rawClips: unknown, rawOptions: unknown): Promise<unknown> {
     const source = await this.media(filePath);
     const clips = rawClips as HighlightCandidate[];
-    if (!Array.isArray(clips) || !clips.length) throw new Error("No clips selected");
+    if (!Array.isArray(clips) || !clips.length) throw new Error("Aucun clip sélectionné");
     const opts = (rawOptions ?? {}) as ExportOptions;
     if (opts.outDir) assertInside(join(this.data(), "exports"), opts.outDir);
     const outDir = opts.outDir || join(defaultExportDir(), sanitizeFilename(basename(source, extname(source)), "video"));
     const transcript = opts.transcript;
     const style = opts.captionStyle && opts.captionStyle !== "none" && transcript ? opts.captionStyle : undefined;
-    if (style === "bubble") throw new Error("The Bubble caption renderer requires the desktop app; choose another caption style in the browser");
+    if (style === "bubble") throw new Error("Les sous-titres Bulle nécessitent l’application de bureau ; choisissez un autre style dans le navigateur");
 
     return this.exports.run(async (signal) => {
       const preparing = (preparation: "translation" | "publish" | "variants" | "media"): void => {
@@ -266,7 +267,7 @@ export class LocalService {
       let translations: Map<number, string> | null = null;
       let translatable: ReturnType<typeof collectClipSegments> = [];
       const translate = opts.translate;
-      if (translate?.targetLang && translate.llm?.baseUrl && translate.llm.model && transcript) {
+      if (translate?.targetLang && translate.llm?.provider !== "builtin" && translate.llm?.baseUrl && translate.llm.model && transcript) {
         translatable = collectClipSegments(transcript, clips);
         preparing("translation");
         translations = await optionalExportStep(signal, () => translateSegments(translatable, translate.targetLang, translate.llm, chatComplete, signal));
@@ -274,12 +275,12 @@ export class LocalService {
       const copySources = clips.map((clip) => ({ id: clip.id, title: clip.title, hook: clip.hook, text: clip.text, keywords: clip.keywords, saveWorthy: Boolean(clip.utility) }));
       const zh = Boolean(transcript?.language.toLowerCase().startsWith("zh"));
       let publishCopies: Map<number, import("../core/publish").PublishCopy> | null = null;
-      if (opts.publishCopy?.llm?.baseUrl && opts.publishCopy.llm.model) {
+      if (opts.publishCopy?.llm?.provider !== "builtin" && opts.publishCopy?.llm?.baseUrl && opts.publishCopy.llm.model) {
         preparing("publish");
         publishCopies = await optionalExportStep(signal, () => generatePublishCopies(copySources, zh, opts.publishCopy!.llm, chatComplete, signal));
       }
       let variantPlans: Map<number, import("../core/variants").VariantPackaging[]> | null = null;
-      if (opts.variants?.llm?.baseUrl && opts.variants.llm.model && Number(opts.variants.count) >= 2) {
+      if (opts.variants?.llm?.provider !== "builtin" && opts.variants?.llm?.baseUrl && opts.variants.llm.model && Number(opts.variants.count) >= 2) {
         preparing("variants");
         variantPlans = await optionalExportStep(signal, () => generateVariantPlans(copySources, Math.min(Number(opts.variants!.count), VARIANT_TOTAL_MAX), zh, opts.variants!.llm, chatComplete, signal));
       }
@@ -321,7 +322,7 @@ export class LocalService {
 
   private async diagnostics(value: unknown, locale: unknown): Promise<unknown> {
     const report = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), renderCacheDir: renderCacheDir(),
-      evidenceCacheDir: evidenceCacheDir(), toolsDir: join(this.data(), "tools", "yt-dlp"), llm: optionalLlm(value), zh: locale === "zh" });
+      evidenceCacheDir: evidenceCacheDir(), toolsDir: join(this.data(), "tools", "yt-dlp"), llm: optionalLlm(value), zh: locale === "zh", fr: locale === "fr" });
     return { checks: report.checks, missingCoreModels: report.missingCoreModels.length, generatedAt: new Date().toISOString() };
   }
 
@@ -333,13 +334,13 @@ export class LocalService {
         if (checkpoint?.file?.path) this.managed(checkpoint.file.path);
         return createProject(this.data(), checkpoint, typeof args[1] === "string" ? args[1] : undefined);
       }
-      case "projectOpen": return openProject(this.data(), stringArg(args[0], "Project id"));
-      case "projectSave": return saveProject(this.data(), stringArg(args[0], "Project id"), args[1]);
-      case "projectRename": return renameProject(this.data(), stringArg(args[0], "Project id"), stringArg(args[1], "Project name"));
-      case "projectDelete": return deleteProject(this.data(), stringArg(args[0], "Project id"));
+      case "projectOpen": return openProject(this.data(), stringArg(args[0], "Identifiant du projet"));
+      case "projectSave": return saveProject(this.data(), stringArg(args[0], "Identifiant du projet"), args[1]);
+      case "projectRename": return renameProject(this.data(), stringArg(args[0], "Identifiant du projet"), stringArg(args[1], "Nom du projet"));
+      case "projectDelete": return deleteProject(this.data(), stringArg(args[0], "Identifiant du projet"));
       case "projectRelink": {
         const file = args[1] as MediaInfo & { path: string };
-        return relinkProject(this.data(), stringArg(args[0], "Project id"), { ...file, path: this.managed(file.path) });
+        return relinkProject(this.data(), stringArg(args[0], "Identifiant du projet"), { ...file, path: this.managed(file.path) });
       }
       case "projectClose": return closeProject(this.data());
       case "sessionCheckpointGet": return readSessionCheckpoint(this.data());
@@ -352,30 +353,34 @@ export class LocalService {
       })));
       case "transcribeMedia": return this.transcribe(stringArg(args[0], "Source"), args[1], args[2], (args[3] ?? {}) as SpeechRunOptions);
       case "cancelTranscribe": this.transcribeAbort?.abort(); return undefined;
-      case "checkLocalSpeech": return qwenHealth(stringArg(args[0], "Speech service URL"));
+      case "checkLocalSpeech": return qwenHealth(stringArg(args[0], "Adresse du service vocal"));
       case "previewAlignment": {
-        if (this.alignmentAbort || this.transcribeAbort) throw new Error("speech:busy");
+        if (this.alignmentAbort || this.transcribeAbort) throw new Error("Une transcription ou un alignement est déjà en cours");
         const controller = new AbortController(); this.alignmentAbort = controller;
         try { return await previewTranscriptAlignment(await this.media(args[0]), args[1] as Transcript, args[2] as any, modelsRoot(), controller.signal); }
         finally { if (this.alignmentAbort === controller) this.alignmentAbort = null; }
       }
       case "cancelAlignment": this.alignmentAbort?.abort(); return undefined;
-      case "importSubtitle": return importSubtitleText(await this.media(args[0]), stringArg(args[1], "Subtitle text"), args[2] === "vtt" ? "vtt" : "srt");
+      case "importSubtitle": return importSubtitleText(await this.media(args[0]), stringArg(args[1], "Texte des sous-titres"), args[2] === "vtt" ? "vtt" : "srt");
       case "detectHighlights": return this.detect(args);
       case "exportClips": return this.export(args[0], args[1], args[2]);
       case "cancelExport": this.exports.cancel(); return undefined;
       case "importMediaUrl": {
-        if (this.urlAbort) throw new Error("Another URL import is already running");
+        if (this.urlAbort) throw new Error("Un autre import d’URL est déjà en cours");
         const controller = new AbortController(); this.urlAbort = controller;
-        try { return await importMediaUrl(stringArg(args[0], "Media URL"), { toolsDir: join(this.data(), "tools", "yt-dlp"),
+        try { return await importMediaUrl(stringArg(args[0], "URL du média"), { toolsDir: join(this.data(), "tools", "yt-dlp"),
           destDir: join(this.data(), "uploads"), signal: controller.signal, onProgress: (event) => this.hub.emit("url-import", event) }); }
+        catch (error) {
+          if (error instanceof Error && error.name === "AbortError") throw error;
+          throw new Error(localizeUrlImportError(error));
+        }
         finally { if (this.urlAbort === controller) this.urlAbort = null; }
       }
       case "cancelUrlImport": this.urlAbort?.abort(); return undefined;
       case "getAudioPeaks": return extractPeaks(await this.media(args[0]), Number(args[1]), Number(args[2]));
       case "timelineData": {
         const source = await this.media(args[0]); const duration = Number(args[1]);
-        if (!(duration > 0)) throw new Error("A positive duration is required");
+        if (!(duration > 0)) throw new Error("Une durée positive est requise");
         const media = await probeMedia(source); const analysis = media.hasVideo ? { videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) } : {};
         const bins = Math.min(720, Math.max(120, Math.round(duration / 5)));
         const [signals, items, thumbs] = await Promise.all([
@@ -387,14 +392,14 @@ export class LocalService {
       }
       case "contactSheet": {
         const source = await this.media(args[0]); const from = Math.max(0, Number(args[1])); const to = Number(args[2]);
-        if (!(to > from)) throw new Error("A valid contact-sheet range is required");
+        if (!(to > from)) throw new Error("Une plage de planche-contact valide est requise");
         const span = to - from; const pad = Math.min(0.3, span / 10); const usable = span - 2 * pad;
         const times = Array.from({ length: 9 }, (_, i) => from + pad + (usable * (i + 0.5)) / 9);
         const media = await probeMedia(source); const b64 = await composeContactSheetJpeg(source, times,
           { fontFile: join(serverRoot(), "resources", "fonts", "SourceHanSansSC-Bold.otf"), videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) }).catch(() => null);
         return b64 ? `data:image/jpeg;base64,${b64}` : "";
       }
-      case "listLlmModels": return listModels(stringArg(args[0], "Base URL"), typeof args[1] === "string" ? args[1] : "", args[2] as LlmConfig["provider"]);
+      case "listLlmModels": return listModels(stringArg(args[0], "URL de base"), typeof args[1] === "string" ? args[1] : "", args[2] as LlmConfig["provider"]);
       case "recordReview": return recordReview(this.data(), { at: new Date().toISOString(), video: basename(stringArg(args[0], "Source")),
         kept: args[1] as any, rejected: args[2] as any });
       case "performanceGet": {
@@ -417,8 +422,8 @@ export class LocalService {
       case "diagnosticsClearRenderCache": await clearRenderCache(renderCacheDir()); return this.diagnostics(args[0], args[1]);
       case "diagnosticsClearEvidenceIndex": this.signals.clear(); await clearEvidenceIndex(evidenceCacheDir()); return this.diagnostics(args[0], args[1]);
       case "diagnosticsPrepareModels": {
-        if (this.diagnosticsAbort) throw new Error("Model preparation is already running");
-        const before = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), renderCacheDir: renderCacheDir(), evidenceCacheDir: evidenceCacheDir(), llm: optionalLlm(args[0]), zh: args[1] === "zh" });
+        if (this.diagnosticsAbort) throw new Error("La préparation des modèles est déjà en cours");
+        const before = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), renderCacheDir: renderCacheDir(), evidenceCacheDir: evidenceCacheDir(), llm: optionalLlm(args[0]), zh: args[1] === "zh", fr: args[1] === "fr" });
         const controller = new AbortController(); this.diagnosticsAbort = controller;
         try {
           for (let i = 0; i < before.missingCoreModels.length; i++) {
@@ -433,7 +438,7 @@ export class LocalService {
       case "defaultOutDir": return defaultExportDir();
       case "modelsInfo": return inspectModels(modelsRoot(), defaultModelsRoot(this.data()));
       case "moveModelsDir": {
-        const target = assertInside(this.data(), stringArg(args[0], "Model directory"));
+        const target = assertInside(this.data(), stringArg(args[0], "Dossier des modèles"));
         const landed = await moveModelsDir(modelsRoot(), target);
         writeAppSettings(this.data(), { ...readAppSettings(this.data()), modelsDir: landed === defaultModelsRoot(this.data()) ? undefined : landed });
         return landed;
@@ -450,8 +455,8 @@ export class LocalService {
       case "checkUpdate": return null;
       case "watchStart": case "watchStop": case "webhookStart": case "webhookStop":
       case "automationTaskRetry": case "automationTaskCancel": case "automationTasksClear":
-        throw new Error("Unattended watch/webhook automation is available through the desktop app and MCP, not this browser session");
-      default: throw new Error(`Unknown local API method: ${method}`);
+        throw new Error("L’automatisation par surveillance ou webhook est disponible dans l’application de bureau et via MCP, pas dans cette session navigateur");
+      default: throw new Error(`Méthode API locale inconnue : ${method}`);
     }
   }
 

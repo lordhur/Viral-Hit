@@ -40,11 +40,18 @@ function loadLocalEndpoint(key: string, defaults: PrefilterSettings): PrefilterS
       const p = JSON.parse(raw) as Partial<PrefilterSettings>;
       // One-time migration: an existing key may finish this session, but is immediately removed from durable storage.
       localStorage.setItem(key, JSON.stringify({ ...p, apiKey: undefined }));
+      const baseUrl = typeof p.baseUrl === "string" && p.baseUrl ? p.baseUrl : defaults.baseUrl;
+      // Les anciens préfiltres/visions cloud sont désactivés lors de la migration
+      // gratuite. Seul un service boucle locale peut être contacté par l’interface.
+      if (!isLocalBaseUrl(baseUrl)) {
+        localStorage.setItem(key, JSON.stringify({ ...defaults, enabled: false, apiKey: undefined }));
+        return { ...defaults, enabled: false };
+      }
       return {
         enabled: p.enabled === true,
-        baseUrl: typeof p.baseUrl === "string" && p.baseUrl ? p.baseUrl : defaults.baseUrl,
+        baseUrl,
         model: typeof p.model === "string" && p.model ? p.model : defaults.model,
-        apiKey: typeof p.apiKey === "string" ? p.apiKey : undefined,
+        apiKey: undefined,
       };
     }
   } catch {
@@ -69,7 +76,22 @@ export interface LlmPreset {
  * 厂商换代很快(deepseek-chat 已于 2026-07-24 下线),所以 UI 提供「拉取模型」
  * 直接问端点要真实清单,不指望这里的名字长期有效。
  */
+export const BUILTIN_LLM_CONFIG: LlmConfig = {
+  baseUrl: "builtin://local-free",
+  apiKey: "",
+  model: "regles-locales",
+  provider: "builtin",
+};
+
 export const LLM_PRESET_LIST: LlmPreset[] = [
+  {
+    id: "builtin",
+    label: "Gratuit · moteur intégré",
+    baseUrl: BUILTIN_LLM_CONFIG.baseUrl,
+    model: BUILTIN_LLM_CONFIG.model,
+    provider: "builtin",
+    keyUrl: "",
+  },
   {
     id: "atlas",
     label: "Atlas Cloud",
@@ -154,7 +176,7 @@ export const LLM_PRESET_LIST: LlmPreset[] = [
   },
   {
     id: "ollama",
-    label: "Ollama(本地)",
+    label: "Ollama · local gratuit",
     baseUrl: "http://localhost:11434/v1",
     provider: "ollama",
     model: "qwen3:8b",
@@ -162,35 +184,45 @@ export const LLM_PRESET_LIST: LlmPreset[] = [
   },
 ];
 
+/** Seuls les choix réellement gratuits sont proposés dans l’interface grand public. */
+export const LLM_FREE_PRESET_LIST = LLM_PRESET_LIST.filter((preset) => preset.provider === "builtin" || preset.provider === "ollama");
+
 /** 按 baseUrl 认出当前选的是哪家(用户改过 baseUrl 就认不出,返回 undefined)。 */
 export function presetForBaseUrl(baseUrl: string): LlmPreset | undefined {
   return LLM_PRESET_LIST.find((p) => p.baseUrl === baseUrl);
 }
 
-/** 兼容旧引用:仍以 atlas 为默认。 */
-export const LLM_PRESETS = { atlas: LLM_PRESET_LIST[0] } as const;
+/** Presets conservés pour la compatibilité ; le moteur intégré est le défaut. */
+export const LLM_PRESETS = {
+  builtin: LLM_PRESET_LIST.find((preset) => preset.id === "builtin")!,
+  atlas: LLM_PRESET_LIST.find((preset) => preset.id === "atlas")!,
+  ollama: LLM_PRESET_LIST.find((preset) => preset.id === "ollama")!,
+} as const;
 
 function load(): LlmConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<LlmConfig>;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, apiKey: "" }));
       localStorage.removeItem(LEGACY_STORAGE_KEY);
-      if (typeof parsed.baseUrl === "string" && typeof parsed.model === "string") {
-        const providers: LlmProvider[] = ["openai-compatible", "openai", "anthropic", "gemini", "mimo", "ollama"];
-        return {
-          baseUrl: parsed.baseUrl,
-          apiKey: parsed.apiKey ?? "",
-          model: parsed.model,
-          provider: providers.includes(parsed.provider as LlmProvider) ? parsed.provider : presetForBaseUrl(parsed.baseUrl)?.provider ?? "openai-compatible",
-        };
+      if (parsed.provider === "builtin" || parsed.baseUrl === BUILTIN_LLM_CONFIG.baseUrl) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(BUILTIN_LLM_CONFIG));
+        return { ...BUILTIN_LLM_CONFIG };
       }
+      if (parsed.provider === "ollama" && typeof parsed.baseUrl === "string" && typeof parsed.model === "string" && isLocalBaseUrl(parsed.baseUrl)) {
+        const local = { baseUrl: parsed.baseUrl, apiKey: "", model: parsed.model, provider: "ollama" as const };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(local));
+        return local;
+      }
+      // Migration unique et déterministe : une ancienne configuration Atlas/cloud
+      // ne doit plus produire de 401 ni lancer un appel payant au démarrage.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(BUILTIN_LLM_CONFIG));
+      return { ...BUILTIN_LLM_CONFIG };
     }
   } catch {
     /* fall through to defaults */
   }
-  return { baseUrl: LLM_PRESETS.atlas.baseUrl, apiKey: "", model: LLM_PRESETS.atlas.model, provider: "openai-compatible" };
+  return { ...BUILTIN_LLM_CONFIG };
 }
 
 interface LlmState {
@@ -205,7 +237,12 @@ interface LlmState {
 export const useLlmStore = create<LlmState>((set, get) => ({
   config: load(),
   setConfig: (partial) => {
-    const config = { ...get().config, ...partial };
+    const candidate = { ...get().config, ...partial };
+    const config: LlmConfig = candidate.provider === "builtin"
+      ? { ...BUILTIN_LLM_CONFIG }
+      : candidate.provider === "ollama" && isLocalBaseUrl(candidate.baseUrl) && candidate.model.trim()
+        ? { baseUrl: candidate.baseUrl, apiKey: "", model: candidate.model, provider: "ollama" }
+        : { ...BUILTIN_LLM_CONFIG };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...config, apiKey: "" }));
     } catch {
@@ -215,7 +252,7 @@ export const useLlmStore = create<LlmState>((set, get) => ({
   },
   prefilter: loadLocalEndpoint(PREFILTER_KEY, PREFILTER_DEFAULTS),
   setPrefilter: (partial) => {
-    const prefilter = { ...get().prefilter, ...partial };
+    const prefilter = { ...get().prefilter, ...partial, apiKey: undefined };
     try {
       localStorage.setItem(PREFILTER_KEY, JSON.stringify({ ...prefilter, apiKey: undefined }));
     } catch {
@@ -225,7 +262,7 @@ export const useLlmStore = create<LlmState>((set, get) => ({
   },
   vision: loadLocalEndpoint(VISION_KEY, VISION_DEFAULTS),
   setVision: (partial) => {
-    const vision = { ...get().vision, ...partial };
+    const vision = { ...get().vision, ...partial, apiKey: undefined };
     try {
       localStorage.setItem(VISION_KEY, JSON.stringify({ ...vision, apiKey: undefined }));
     } catch {
@@ -235,8 +272,9 @@ export const useLlmStore = create<LlmState>((set, get) => ({
   },
 }));
 
-/** Ready = enough fields to attempt a call (Ollama needs no key). */
+/** Le moteur intégré est toujours prêt ; Ollama ne demande aucun jeton. */
 export function isLlmReady(config: LlmConfig): boolean {
-  const needsKey = !isLocalBaseUrl(config.baseUrl);
-  return Boolean(config.baseUrl && config.model && (!needsKey || config.apiKey));
+  if (config.provider === "builtin") return true;
+  if (config.provider === "ollama") return Boolean(config.model && isLocalBaseUrl(config.baseUrl));
+  return false;
 }

@@ -67,7 +67,7 @@ describe("handleMcpMessage", () => {
   it("未知工具/执行抛错 → isError,消息透传", async () => {
     const unknown = await handleMcpMessage({ id: 5, method: "tools/call", params: { name: "nope", arguments: {} } }, noop, "0");
     expect((unknown as { result: { isError: boolean } }).result.isError).toBe(true);
-    const boom: ToolExecutor = async () => { throw new Error("文件不存在或不可读: /x.mp4"); };
+    const boom: ToolExecutor = async () => { throw new Error("Le fichier source est introuvable ou illisible : /x.mp4"); };
     const res = await handleMcpMessage(
       { id: 6, method: "tools/call", params: { name: "transcribe_video", arguments: { videoPath: "/x.mp4" } } },
       boom,
@@ -75,7 +75,7 @@ describe("handleMcpMessage", () => {
     );
     const r = res as { result: { content: Array<{ text: string }>; isError: boolean } };
     expect(r.result.isError).toBe(true);
-    expect(r.result.content[0].text).toContain("文件不存在");
+    expect(r.result.content[0].text).toContain("introuvable");
   });
 
   it("未知方法 → -32601;ping → 空结果", async () => {
@@ -98,7 +98,7 @@ describe("validateToolArgs", () => {
     expect(validateToolArgs(tool, { videoPath: "/v.mp4", maxClips: 8, vertical: false, autoEnhance: true })).toBeNull();
     expect(validateToolArgs(tool, { videoPath: "/v.mp4", autoEnhance: "yes" })).toContain("autoEnhance");
     expect(validateToolArgs(tool, { videoPath: "/v.mp4", denoiseMode: "smart" })).toBeNull();
-    expect(validateToolArgs(tool, { videoPath: "/v.mp4", denoiseMode: "magic" })).toContain("basic|smart");
+    expect(validateToolArgs(tool, { videoPath: "/v.mp4", denoiseMode: "magic" })).toContain("basic ou smart");
   });
 
   it("referencePath 两个切片工具都声明为可选 string", () => {

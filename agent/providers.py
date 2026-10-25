@@ -22,7 +22,7 @@ import urllib.request
 
 DEFAULT_TIMEOUT_SECONDS = 240.0
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
-PROVIDERS = ("openai", "openai-compatible", "anthropic", "gemini", "mimo", "ollama")
+PROVIDERS = ("builtin", "openai", "openai-compatible", "anthropic", "gemini", "mimo", "ollama")
 
 
 class ProviderError(RuntimeError):
@@ -66,13 +66,14 @@ def config_from_env(env: Mapping[str, str] | None = None, *, require_model: bool
     setup can be reused. Provider-specific keys are only used with their provider.
     """
     source = os.environ if env is None else env
-    provider = _first(source, "VIRALHIT_LLM_PROVIDER").lower() or "openai-compatible"
+    provider = _first(source, "VIRALHIT_LLM_PROVIDER").lower() or "builtin"
     aliases = {"custom": "openai-compatible", "compatible": "openai-compatible", "google": "gemini", "local": "ollama"}
     provider = aliases.get(provider, provider)
     if provider not in PROVIDERS:
         raise ProviderError(f"Unsupported LLM provider {provider!r}; choose one of: {', '.join(PROVIDERS)}")
 
     key_names = {
+        "builtin": (),
         "openai": ("VIRALHIT_LLM_API_KEY", "OPENAI_API_KEY"),
         "anthropic": ("VIRALHIT_LLM_API_KEY", "ANTHROPIC_API_KEY"),
         "gemini": ("VIRALHIT_LLM_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"),
@@ -84,6 +85,7 @@ def config_from_env(env: Mapping[str, str] | None = None, *, require_model: bool
     base_url = _first(source, "VIRALHIT_LLM_BASE_URL", "HOTCLIP_LLM_BASE_URL")
     if not base_url:
         base_url = {
+            "builtin": "builtin://local-free",
             "openai": "https://api.openai.com/v1",
             "openai-compatible": "",
             "anthropic": "https://api.anthropic.com",
@@ -93,11 +95,15 @@ def config_from_env(env: Mapping[str, str] | None = None, *, require_model: bool
         }[provider]
     base_url = base_url.rstrip("/")
     model = _first(source, "VIRALHIT_LLM_MODEL", "HOTCLIP_LLM_MODEL")
+    if provider == "builtin":
+        base_url = "builtin://local-free"
+        model = "regles-locales"
+        api_key = ""
     if require_model and not model:
-        raise ProviderError("VIRALHIT_LLM_MODEL is required; no model name is guessed or hard-coded")
+        raise ProviderError("VIRALHIT_LLM_MODEL est requis pour ce fournisseur ; utilisez builtin ou configurez un modèle Ollama local")
     if provider == "openai-compatible" and not base_url:
         raise ProviderError("VIRALHIT_LLM_BASE_URL is required for the openai-compatible provider")
-    if not api_key and provider not in {"ollama", "openai-compatible"}:
+    if not api_key and provider not in {"builtin", "ollama", "openai-compatible"}:
         raise ProviderError(f"An API key is required for {provider}; set VIRALHIT_LLM_API_KEY in the environment")
     if not api_key and provider == "openai-compatible" and not _local_base_url(base_url):
         raise ProviderError("VIRALHIT_LLM_API_KEY is required for a remote OpenAI-compatible endpoint")
@@ -258,6 +264,8 @@ def complete(config: LLMConfig, system: str, user: str, *, max_tokens: int = 819
     """Generate one text response through the selected provider."""
     if not 256 <= max_tokens <= 32768:
         raise ValueError("max_tokens must be between 256 and 32768")
+    if config.provider == "builtin":
+        raise ProviderError("Le moteur intégré gratuit couvre la détection de clips. Pour un récap créatif, configurez Ollama localement ; aucun service payant ne sera contacté automatiquement.")
     if config.provider == "anthropic":
         return _complete_anthropic(config, system, user, max_tokens)
     if config.provider == "gemini":

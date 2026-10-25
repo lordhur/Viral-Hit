@@ -171,7 +171,7 @@ export interface AlignmentPreview {
   uncertainWords: number;
 }
 
-export type LlmProvider = "openai-compatible" | "openai" | "anthropic" | "gemini" | "mimo" | "ollama";
+export type LlmProvider = "builtin" | "openai-compatible" | "openai" | "anthropic" | "gemini" | "mimo" | "ollama";
 
 /** Unified LLM connection settings; provider defaults to OpenAI-compatible for legacy projects. */
 export interface LlmConfig {

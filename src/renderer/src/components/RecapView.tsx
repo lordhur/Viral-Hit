@@ -4,6 +4,7 @@ import { getApi } from "../api/provider";
 import { cancelRecapJob, listRecapJobs, recapMediaUrl, startRecapJob, subscribeRecapJobs } from "../api/recap";
 import type { ProductionJob, RecapJobInput } from "../../../shared/production";
 import { useLocaleStore, useT } from "../i18n/store";
+import { errorText } from "../i18n/errors";
 
 function fileName(path: string): string { return path.split(/[\\/]/).pop() || path; }
 
@@ -29,7 +30,7 @@ export function RecapView(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    void listRecapJobs().then(setJobs).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
+    void listRecapJobs().then(setJobs).catch((reason) => setError(errorText(reason)));
     return subscribeRecapJobs(upsert);
   }, [upsert]);
 
@@ -38,7 +39,7 @@ export function RecapView(): React.JSX.Element {
     try {
       const path = await getApi().selectMedia();
       if (path) setVideos((current) => current.includes(path) ? current : [...current, path]);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    } catch (reason) { setError(errorText(reason)); }
   }, []);
 
   const start = async (input?: RecapJobInput): Promise<void> => {
@@ -49,7 +50,7 @@ export function RecapView(): React.JSX.Element {
         skipAsr, burnSubtitles, confirmVoiceRights: rights,
       });
       upsert(job);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    } catch (reason) { setError(errorText(reason)); }
     finally { setBusy(false); }
   };
 
@@ -122,7 +123,7 @@ export function RecapView(): React.JSX.Element {
                       <p className="mt-1 text-[10.5px] text-mut">{new Date(job.createdAt).toLocaleString(locale)} · {job.request?.editMode || "full"}</p>
                     </div>
                   </div>
-                  {job.error && <p className="mt-3 break-words rounded-lg bg-red-500/5 p-2.5 text-[10.5px] leading-relaxed text-red-300">{job.error}</p>}
+                  {job.error && <p className="mt-3 break-words rounded-lg bg-red-500/5 p-2.5 text-[10.5px] leading-relaxed text-red-300">{errorText(job.error)}</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(job.status === "running" || job.status === "queued") && <button type="button" onClick={() => void cancelRecapJob(job.id).then(() => listRecapJobs().then(setJobs))} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-mut hover:text-red-300"><LuSquare className="h-3 w-3" />{t("cancel")}</button>}
                     {(job.status === "failed" || job.status === "interrupted" || job.status === "cancelled") && <button type="button" disabled={busy} onClick={() => void start(job.request ?? { videos: job.videos, workDir: job.workDir })} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-mut hover:text-fg"><LuRotateCcw className="h-3 w-3" />{t("resume")}</button>}

@@ -16,50 +16,52 @@ import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } 
 import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
 import { describeSubtitleImportError } from "../shared/subtitle-import";
+import { localizeErrorMessage } from "../shared/french-errors";
 import { userDataDir, modelsRoot, cacheDir, renderCacheDir, evidenceCacheDir, llmFromEnv } from "../core/appenv";
 import { runDoctor } from "../core/doctor";
 import { ensureModel } from "../core/models";
 import { loadReviewMemory } from "../core/review-memory";
 import { importPerformanceFile, loadPerformanceMemory, performanceReport } from "../core/performance-memory";
 
-const USAGE = `Viral Hit CLI —— 本地 AI 切片,素材不出电脑
+const USAGE = `Viral Hit CLI — clips locaux et gratuits, vos médias restent sur cet ordinateur
 
-用法:
-  pnpm cli transcribe <视频路径>
-      本地逐字转写(默认 SenseVoice,自动续跑已完成的识别段)
-      --engine sensevoice|paraformer|fireredasr|qwen3
-      --asr-url http://127.0.0.1:8766   可选 Qwen3 本地服务
-      --restart-transcription          丢弃当前引擎的分段进度并重做
-      transcribe / highlights / clip 均支持 --subtitles <原文.srt|原文.vtt>
-      显式导入已有 UTF-8 字幕,跳过 ASR;字词时间为估算,需复核
+Usage :
+  pnpm cli transcribe <chemin-de-la-vidéo>
+      Transcription locale avec Whisper français par défaut et reprise des fenêtres terminées
+      --engine whisper-fr|sensevoice|paraformer|fireredasr|qwen3
+      --asr-url http://127.0.0.1:8766   service local Qwen3 facultatif
+      --restart-transcription          abandonne la progression du moteur actuel et recommence
+      transcribe / highlights / clip acceptent --subtitles <original.srt|original.vtt>
+      Importe des sous-titres UTF-8 existants sans ASR ; les temps internes sont estimés et doivent être vérifiés
 
-  pnpm cli highlights <视频路径> [--max-clips N] [--reference 对标视频] [--json]
-      AI 通读全文找爆点,输出候选清单(评分/钩子/切点,先审后剪)
-      --reference: 丢一条想对标的爆款切片,实测其节奏(时长/语速/镜头/钩子)
-      生成画像,选段向对标节奏靠拢(偏好不是硬约束)
+  pnpm cli highlights <chemin-de-la-vidéo> [--max-clips N] [--reference vidéo-de-référence] [--json]
+      Détection gratuite des moments forts, avec scores, accroches et points de coupe
+      --reference : mesure le rythme d’une vidéo de référence (durée, débit, plans, accroche)
+      et rapproche la sélection de ce profil sans en faire une contrainte absolue
 
-  pnpm cli clip <视频路径> [--max-clips N] [--reference 对标视频] [--no-vertical] [--no-captions] [--auto-enhance] [--denoise|--smart-denoise] [--out 目录] [--json]
-      全托管一条龙:转写 → 找爆点 → 出片(竖屏/字幕/跳剪/响度默认全开)
-      + 出片质检(黑屏/长静音/响度/时长/切点/平台违禁词复核),报告进 clips.json
-      + 可自愈告警自动修复(首尾静音黑屏裁边/响度重归一,修复记录进 qa.repair)
-      --auto-enhance: 本地测量保留画面,仅在明显偏暗/灰/过饱和时克制校正(默认关闭)
-      --denoise: 基础固定滤镜降噪;--smart-denoise: 48kHz 本地模型增强人声,失败回退基础档
+  pnpm cli clip <chemin-de-la-vidéo> [--max-clips N] [--reference vidéo-de-référence] [--no-vertical] [--no-captions] [--auto-enhance] [--denoise|--smart-denoise] [--out dossier] [--json]
+      Parcours autonome : transcription → détection → export (vertical, sous-titres, suppression des silences et loudness)
+      + contrôle qualité (noir, silence, loudness, durée, coupes et vocabulaire sensible) dans clips.json
+      + réparation automatique des alertes récupérables, consignée dans qa.repair
+      --auto-enhance : correction locale mesurée des images trop sombres, ternes ou saturées (désactivée par défaut)
+      --denoise : filtre fixe ; --smart-denoise : voix locale 48 kHz avec repli sur le filtre fixe
 
   pnpm cli doctor [--download]
-      环境自检:ffmpeg/模型安装状态/LLM 端点/磁盘/缓存,给出修复建议
-      --download: 把默认管线要用的模型现在预下载好(断点续传,断网重跑接着下)
+      Diagnostic de FFmpeg, des modèles, du moteur de détection, du disque et des caches
+      --download : prépare les modèles du parcours par défaut avec reprise après interruption
 
-  pnpm cli feedback <平台导出的 CSV 或 JSON>
-      导入真实播放/点赞/评论/分享/收藏数据,本地学习高低表现模式
-      支持中英文字段名与 1.2万/7.8k 等数字格式;同平台同视频重复导入会更新
+  pnpm cli feedback <CSV ou JSON exporté par une plateforme>
+      Importe les vues, mentions J’aime, commentaires, partages et favoris pour un apprentissage local
+      Accepte les en-têtes français, anglais et chinois ainsi que les nombres compacts
 
   pnpm cli feedback-report [--json]
-      查看 Viral Hit 已学到的高/低表现样例;之后桌面/CLI/MCP/监听找爆点都会使用
+      Affiche les exemples de bonnes et mauvaises performances appris localement
 
-环境变量(highlights / clip 需要):
-  VIRALHIT_LLM_BASE_URL   OpenAI 兼容端点(本地 Ollama: http://localhost:11434/v1)
-  VIRALHIT_LLM_MODEL      模型名(如 qwen3:8b)
-  VIRALHIT_LLM_API_KEY    云端接口的 key(本地 Ollama 可省)`;
+Configuration IA facultative (highlights / clip) :
+  Le moteur gratuit intégré est utilisé par défaut, sans clé ni variable d’environnement.
+  VIRALHIT_LLM_BASE_URL   endpoint OpenAI compatible d’un Ollama local explicitement choisi
+  VIRALHIT_LLM_MODEL      nom du modèle local (par exemple qwen3:8b)
+  VIRALHIT_LLM_API_KEY    inutile avec Ollama ; ne configurez pas un ancien jeton cloud pour le moteur intégré`;
 
 /** 极简参数解析:布尔开关 + 带值选项,首个非选项参数是视频路径。 */
 export interface CliArgs {
@@ -100,38 +102,38 @@ export function parseCliArgs(argv: string[]): CliArgs {
     else if (a === "--restart-transcription") args.restart = true;
     else if (a === "--engine") {
       const value = rest[++i];
-      if (!["sensevoice", "paraformer", "fireredasr", "qwen3"].includes(value)) throw new Error("--engine: sensevoice | paraformer | fireredasr | qwen3");
+      if (!["whisper-fr", "sensevoice", "paraformer", "fireredasr", "qwen3"].includes(value)) throw new Error("--engine attend l’un de ces moteurs : whisper-fr | sensevoice | paraformer | fireredasr | qwen3");
       args.engineId = value;
     } else if (a === "--asr-url") {
       const value = rest[++i];
-      if (!value) throw new Error("--asr-url requires a loopback URL");
+      if (!value) throw new Error("--asr-url attend une URL locale de bouclage");
       args.localServiceUrl = localSpeechUrl(value);
     }
     else if (a === "--max-clips") {
       const v = Number(rest[++i]);
-      if (!Number.isFinite(v)) throw new Error("--max-clips 需要一个数字");
+      if (!Number.isFinite(v)) throw new Error("--max-clips attend un nombre");
       args.maxClips = Math.max(1, Math.min(12, Math.round(v)));
     } else if (a === "--out") {
       const v = rest[++i];
-      if (!v) throw new Error("--out 需要一个目录路径");
+      if (!v) throw new Error("--out attend le chemin d’un dossier");
       args.outDir = v;
     } else if (a === "--reference") {
       const v = rest[++i];
-      if (!v) throw new Error("--reference 需要一个对标视频路径");
+      if (!v) throw new Error("--reference attend le chemin d’une vidéo de référence");
       args.referencePath = v;
     } else if (a === "--subtitles") {
       const v = rest[++i];
-      if (!v?.trim() || v.startsWith("--")) throw new Error("--subtitles 需要一个 SRT 或 WebVTT 文件路径");
+      if (!v?.trim() || v.startsWith("--")) throw new Error("--subtitles attend le chemin d’un fichier SRT ou WebVTT");
       args.subtitlePath = v;
     } else if (a.startsWith("--")) {
-      throw new Error(`未知选项: ${a}\n\n${USAGE}`);
+      throw new Error(`Option inconnue : ${a}\n\n${USAGE}`);
     } else if (!args.videoPath) {
       args.videoPath = a;
     }
   }
   // doctor/feedback-report 不吃路径;feedback 的位置参数是指标文件路径
-  if (!args.videoPath && !["doctor", "feedback-report"].includes(args.command)) throw new Error(`缺少视频路径或数据文件路径\n\n${USAGE}`);
-  if (args.subtitlePath && !["transcribe", "highlights", "clip"].includes(args.command)) throw new Error("--subtitles 仅用于 transcribe / highlights / clip");
+  if (!args.videoPath && !["doctor", "feedback-report"].includes(args.command)) throw new Error(`Chemin de la vidéo ou du fichier de données manquant\n\n${USAGE}`);
+  if (args.subtitlePath && !["transcribe", "highlights", "clip"].includes(args.command)) throw new Error("--subtitles est réservé à transcribe / highlights / clip");
   return args;
 }
 
@@ -151,7 +153,7 @@ async function main(signal?: AbortSignal): Promise<void> {
     } catch {
       // 保持 null
     }
-    const report = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), renderCacheDir: renderCacheDir(), evidenceCacheDir: evidenceCacheDir(), llm });
+    const report = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), renderCacheDir: renderCacheDir(), evidenceCacheDir: evidenceCacheDir(), llm, fr: true });
     const icon = { ok: "✅", warn: "⚠️", fail: "❌" } as const;
     for (const c of report.checks) {
       process.stdout.write(`${icon[c.status]} ${c.name}:${c.detail}\n`);
@@ -162,14 +164,14 @@ async function main(signal?: AbortSignal): Promise<void> {
       for (const asset of report.missingCoreModels) {
         await ensureModel(modelsRoot(), asset, (p) => {
           const pct = Math.min(100, Math.round((p.downloadedBytes / p.totalBytes) * 100));
-          const verb = p.phase === "extract" ? "解压" : "下载";
+          const verb = p.phase === "extract" ? "Extraction" : "Téléchargement";
           process.stderr.write(`\r${verb} ${asset.id}:${pct}%(${mb(p.downloadedBytes)}/${mb(p.totalBytes)}MB)   `);
         });
-        process.stderr.write(`\r✅ ${asset.id} 已就绪${" ".repeat(24)}\n`);
+        process.stderr.write(`\r✅ ${asset.id} est prêt${" ".repeat(24)}\n`);
       }
-      process.stdout.write("默认管线模型全部就绪。\n");
+      process.stdout.write("Tous les modèles du parcours par défaut sont prêts.\n");
     } else if (report.missingCoreModels.length > 0) {
-      process.stdout.write(`有 ${report.missingCoreModels.length} 个默认管线模型未安装,可加 --download 现在下好。\n`);
+      process.stdout.write(`${report.missingCoreModels.length} modèle(s) du parcours par défaut ne sont pas installés ; utilisez --download pour les préparer.\n`);
     }
     if (report.checks.some((c) => c.status === "fail")) process.exitCode = 1;
     return;
@@ -177,14 +179,14 @@ async function main(signal?: AbortSignal): Promise<void> {
 
   if (args.command === "feedback") {
     const result = await importPerformanceFile(userDataDir(), args.videoPath);
-    process.stdout.write(`已导入 ${result.imported} 条发布表现,跳过 ${result.skipped} 条无效记录;本地共学习 ${result.total} 条。\n`);
-    process.stdout.write(`${performanceReport(result.entries)}\n`);
+    process.stdout.write(`${result.imported} performances importées, ${result.skipped} lignes invalides ignorées ; ${result.total} exemples sont disponibles localement.\n`);
+    process.stdout.write(`${performanceReport(result.entries, false, true)}\n`);
     return;
   }
 
   if (args.command === "feedback-report") {
     const entries = await loadPerformanceMemory(userDataDir());
-    process.stdout.write(args.json ? `${JSON.stringify(entries, null, 2)}\n` : `${performanceReport(entries)}\n`);
+    process.stdout.write(args.json ? `${JSON.stringify(entries, null, 2)}\n` : `${performanceReport(entries, false, true)}\n`);
     return;
   }
 
@@ -193,7 +195,7 @@ async function main(signal?: AbortSignal): Promise<void> {
   // 参考画像:用户显式给的输入,分析失败要说清并按无参考继续(不静默丢)
   const loadReference = async (): Promise<ReferenceProfile | undefined> => {
     if (!args.referencePath) return undefined;
-    process.stderr.write("分析对标视频节奏…\n");
+    process.stderr.write("Analyse du rythme de la vidéo de référence…\n");
     try {
       const p = await analyzeReferenceVideo(args.referencePath, {
         modelsRoot: modelsRoot(),
@@ -202,14 +204,14 @@ async function main(signal?: AbortSignal): Promise<void> {
         glossary,
         signal,
       });
-      const cuts = p.cutsPerMin !== null ? `·镜头 ${p.cutsPerMin} 切/分` : "";
-      const unit = p.zh ? "字" : "词";
+      const cuts = p.cutsPerMin !== null ? ` · ${p.cutsPerMin} plans/min` : "";
+      const unit = p.zh ? " caractère" : " mot";
       process.stderr.write(
-        `参考画像:时长 ${Math.round(p.durationSec)}s·语速 ${p.speechRate}${unit}/秒·句长 ${p.avgSentenceLen}${unit}${cuts}·钩子「${p.hookLine.slice(0, 20)}」\n`
+        `Profil de référence : ${Math.round(p.durationSec)} s · ${p.speechRate}${unit}/s · phrase moyenne ${p.avgSentenceLen}${unit}${cuts} · accroche « ${p.hookLine.slice(0, 20)} »\n`
       );
       return p;
     } catch (e) {
-      process.stderr.write(`⚠ 对标视频分析失败,按无参考继续:${e instanceof Error ? e.message : String(e)}\n`);
+      process.stderr.write(`⚠ Échec de l’analyse de référence ; le traitement continue sans elle : ${localizeErrorMessage(e)}\n`);
       return undefined;
     }
   };
@@ -218,17 +220,17 @@ async function main(signal?: AbortSignal): Promise<void> {
     const t = await transcribeCached(args.videoPath, modelsRoot(), cacheDir(), glossary, signal, args.subtitlePath, { engineId: args.engineId, localServiceUrl: args.localServiceUrl, restart: args.restart });
     if (args.json) process.stdout.write(`${JSON.stringify(t, null, 2)}\n`);
     else for (const s of t.segments) process.stdout.write(`[${fmtClock(s.startSec)}] ${s.text}\n`);
-    if (args.subtitlePath) process.stderr.write("已导入字幕;句内字词时间为估算,请复核字幕时间与自动切点。\n");
-    process.stderr.write(`语言:${t.language} 时长:${fmtClock(t.durationSec)} 共 ${t.segments.length} 句\n`);
+    if (args.subtitlePath) process.stderr.write("Sous-titres importés ; les temps des mots dans chaque phrase sont estimés. Vérifiez les sous-titres et les coupes automatiques.\n");
+    process.stderr.write(`Langue : ${t.language} · durée : ${fmtClock(t.durationSec)} · ${t.segments.length} phrases\n`);
     return;
   }
 
   if (args.command === "highlights") {
     const llm = llmFromEnv();
     const reference = await loadReference();
-    process.stderr.write(args.subtitlePath ? "导入字幕中(字词时间为估算)…\n" : "转写中(带缓存)…\n");
+    process.stderr.write(args.subtitlePath ? "Import des sous-titres (temps des mots estimés)…\n" : "Transcription locale (avec cache)…\n");
     const transcript = await transcribeCached(args.videoPath, modelsRoot(), cacheDir(), glossary, signal, args.subtitlePath, { engineId: args.engineId, localServiceUrl: args.localServiceUrl, restart: args.restart });
-    process.stderr.write("AI 找爆点中…\n");
+    process.stderr.write("Détection des moments forts…\n");
     const candidates = await detectForPipeline(args.videoPath, transcript, {
       modelsRoot: modelsRoot(),
       evidenceCacheDir: evidenceCacheDir(),
@@ -241,7 +243,7 @@ async function main(signal?: AbortSignal): Promise<void> {
       signal,
     });
     if (candidates.length === 0) {
-      process.stderr.write("没有找到值得切的爆点候选。\n");
+      process.stderr.write("Aucun moment fort pertinent n’a été trouvé.\n");
       return;
     }
     const rows = candidates.map((c) => ({
@@ -262,8 +264,8 @@ async function main(signal?: AbortSignal): Promise<void> {
       process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
     } else {
       for (const r of rows) {
-        const mark = r.recommended ? "✅" : "⚠️ 不建议发布";
-        process.stdout.write(`#${r.id} [${r.start}-${r.end}] 评分 ${r.score} ${mark}\n  ${r.title}\n  钩子:${r.hook}\n`);
+        const mark = r.recommended ? "✅" : "⚠️ Publication déconseillée";
+        process.stdout.write(`#${r.id} [${r.start}-${r.end}] score ${r.score} ${mark}\n  ${r.title}\n  Accroche : ${r.hook}\n`);
       }
     }
     return;
@@ -293,12 +295,12 @@ async function main(signal?: AbortSignal): Promise<void> {
       fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
       glossary,
       onStage: (stage) => {
-        const label = { transcribing: args.subtitlePath ? "导入字幕中(字词时间为估算)…" : "转写中(带缓存)…", detecting: "AI 找爆点中…", exporting: "出片中…" }[stage];
+        const label = { transcribing: args.subtitlePath ? "Import des sous-titres (temps des mots estimés)…" : "Transcription locale (avec cache)…", detecting: "Détection des moments forts…", exporting: "Export des clips…" }[stage];
         process.stderr.write(`${label}\n`);
       },
     });
     if (outcome.exported.length === 0) {
-      process.stderr.write("AI 复评后没有建议发布的切片(候选都被判定为弱钩子)。可用 highlights 命令查看全部候选与复评意见。\n");
+      process.stderr.write("Aucun clip n’est recommandé après révision. Utilisez la commande highlights pour examiner tous les candidats et leurs remarques.\n");
       return;
     }
     if (args.json) {
@@ -323,36 +325,36 @@ async function main(signal?: AbortSignal): Promise<void> {
       );
       return;
     }
-    process.stdout.write(`已导出 ${outcome.exported.length} 条切片到 ${outcome.outDir}\n`);
+    process.stdout.write(`${outcome.exported.length} clip(s) exporté(s) vers ${outcome.outDir}\n`);
     for (const r of outcome.exported) {
       const c = outcome.candidates.find((x) => x.id === r.id);
       const colorNote = r.colorConverted
         ? " · HDR→SDR"
         : r.colorConversionSkipped
-          ? " · HDR 色彩路径不支持,未转换"
+          ? " · conversion HDR non prise en charge pour ce chemin couleur"
           : r.colorInspectionFailed
-            ? " · 色彩信息检查失败"
+            ? " · échec du contrôle des informations couleur"
             : "";
-      const audioNote = r.audioEnhancement ? ` · 音频:${r.audioEnhancement}` : "";
-      process.stdout.write(`- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}${colorNote}${audioNote}) ${c?.title ?? ""}\n`);
+      const audioNote = r.audioEnhancement ? ` · audio : ${r.audioEnhancement}` : "";
+      process.stdout.write(`- ${basename(r.path)} (${Math.round(r.durationSec)} s, score ${c?.score ?? "?"}${colorNote}${audioNote}) ${c?.title ?? ""}\n`);
       if (r.qa && r.qa.status === "warn") {
-        process.stdout.write(`  ⚠ 质检:${r.qa.issues.join(";")}\n`);
+        process.stdout.write(`  ⚠ Contrôle qualité : ${r.qa.issues.join(" ; ")}\n`);
       }
       if (r.qa?.repair?.applied) {
-        process.stdout.write(`  🔧 已自动修复:${r.qa.repair.actions.join("、")}\n`);
+        process.stdout.write(`  🔧 Réparations automatiques : ${r.qa.repair.actions.join(" ; ")}\n`);
       }
     }
     const warned = outcome.exported.filter((r) => r.qa?.status === "warn").length;
     process.stdout.write(
       warned > 0
-        ? `出片质检:${warned} 条有告警(详见 clips.json 的 qa 字段)\n`
-        : "出片质检:全部通过(黑屏/长静音/响度/时长/切点/违禁词复核)\n"
+        ? `Contrôle qualité : ${warned} clip(s) avec alerte (voir le champ qa de clips.json)\n`
+        : "Contrôle qualité : tous les clips sont conformes (noir, silence, loudness, durée, coupes et vocabulaire sensible)\n"
     );
-    process.stdout.write("附带 clips.json(标题/评分/时间码/回执/质检)与每条封面 JPG。\n");
+    process.stdout.write("Le fichier clips.json (titres, scores, timecodes, reçus et qualité) et une couverture JPG par clip sont inclus.\n");
     return;
   }
 
-  throw new Error(`未知命令: ${args.command}\n\n${USAGE}`);
+  throw new Error(`Commande inconnue : ${args.command}\n\n${USAGE}`);
 }
 
 // 仅作为入口执行时才跑主流程(单测只 import parseCliArgs)
@@ -362,7 +364,7 @@ if (require.main === module) {
   const speechCommand = ["transcribe", "highlights", "clip"].includes(process.argv[2]);
   if (speechCommand) { process.once("SIGINT", cancel); process.once("SIGTERM", cancel); }
   main(abort.signal).catch((e) => {
-    process.stderr.write(abort.signal.aborted ? "Stopped. Completed local transcription windows can resume on the next run.\n" : `${describeSubtitleImportError(e)}\n`);
+    process.stderr.write(abort.signal.aborted ? "Arrêt demandé. Les fenêtres de transcription terminées pourront être reprises au prochain lancement.\n" : `${localizeErrorMessage(describeSubtitleImportError(e))}\n`);
     process.exitCode = abort.signal.aborted ? 130 : 1;
   }).finally(() => { process.removeListener("SIGINT", cancel); process.removeListener("SIGTERM", cancel); });
 }

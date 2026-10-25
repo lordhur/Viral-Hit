@@ -9,7 +9,7 @@ describe("parseCliArgs (CLI 参数解析)", () => {
     }
     expect(() => parseCliArgs(["clip", "/v/source.mp4", "--subtitles"])).toThrow(/SRT/);
     expect(() => parseCliArgs(["clip", "/v/source.mp4", "--subtitles", "--json"])).toThrow(/SRT/);
-    expect(() => parseCliArgs(["doctor", "--subtitles", "/v/原文.srt"])).toThrow(/仅用于/);
+    expect(() => parseCliArgs(["doctor", "--subtitles", "/v/原文.srt"])).toThrow(/réservé/);
   });
   it("clip 全默认:竖屏+字幕开,视频路径为首个非选项参数", () => {
     const a = parseCliArgs(["clip", "/v/直播回放.mp4"]);
@@ -54,7 +54,7 @@ describe("parseCliArgs (CLI 参数解析)", () => {
     const a = parseCliArgs(["highlights", "/v/a.mp4", "--reference", "/v/对标爆款.mp4"]);
     expect(a.referencePath).toBe("/v/对标爆款.mp4");
     expect(parseCliArgs(["clip", "/v/a.mp4"]).referencePath).toBeUndefined();
-    expect(() => parseCliArgs(["clip", "/v/a.mp4", "--reference"])).toThrow(/对标视频路径/);
+    expect(() => parseCliArgs(["clip", "/v/a.mp4", "--reference"])).toThrow(/vidéo de référence/);
   });
 
   it("doctor 不需要视频路径,--download 可选", () => {
@@ -72,14 +72,14 @@ describe("parseCliArgs (CLI 参数解析)", () => {
       videoPath: "",
       json: true,
     });
-    expect(() => parseCliArgs(["feedback"])).toThrow(/数据文件路径/);
+    expect(() => parseCliArgs(["feedback"])).toThrow(/fichier de données/);
   });
 
   it("缺命令/缺路径/未知选项/非法数值 → 抛出含用法的错误", () => {
-    expect(() => parseCliArgs([])).toThrow(/用法/);
-    expect(() => parseCliArgs(["clip"])).toThrow(/缺少视频路径/);
-    expect(() => parseCliArgs(["clip", "/v/a.mp4", "--wat"])).toThrow(/未知选项/);
-    expect(() => parseCliArgs(["clip", "/v/a.mp4", "--max-clips", "abc"])).toThrow(/数字/);
+    expect(() => parseCliArgs([])).toThrow(/Usage/);
+    expect(() => parseCliArgs(["clip"])).toThrow(/Chemin de la vidéo/);
+    expect(() => parseCliArgs(["clip", "/v/a.mp4", "--wat"])).toThrow(/Option inconnue/);
+    expect(() => parseCliArgs(["clip", "/v/a.mp4", "--max-clips", "abc"])).toThrow(/nombre/);
   });
 
   it("-h / --help → 输出用法", () => {

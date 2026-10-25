@@ -17,6 +17,9 @@ export function buildRenderToggles(opts: {
   atlasReady: boolean;
 }): RenderToggles {
   const { prefs, config, brandState, diarize, transcript, atlasReady } = opts;
+  // Le moteur intégré ne fait aucun réseau : les finitions qui exigent un LLM
+  // restent facultatives et ne sont activées qu'avec un vrai endpoint Ollama.
+  const aiConfig = config.provider === "builtin" ? null : config;
   // 中文源译英,其余译中——短视频出海/引进的两个主方向
   const targetLang = (transcript?.language || "").startsWith("zh") ? "en" : "zh";
   return {
@@ -46,8 +49,8 @@ export function buildRenderToggles(opts: {
     muteTerms: prefs.muteSensitive && prefs.sensitiveWords.length > 0 ? prefs.sensitiveWords : undefined,
     compilation: prefs.compilation,
     brand: activeBrandStyle(brandState),
-    translate: prefs.translate ? { targetLang, llm: config } : undefined,
-    publishCopy: prefs.publishCopy ? { llm: config } : undefined,
+    translate: prefs.translate && aiConfig ? { targetLang, llm: aiConfig } : undefined,
+    publishCopy: prefs.publishCopy && aiConfig ? { llm: aiConfig } : undefined,
     subtitleFile: prefs.subtitleFile,
     timeline: prefs.timeline,
     jianyingDraft: prefs.jianyingDraft,
@@ -55,7 +58,7 @@ export function buildRenderToggles(opts: {
     evidencePack: prefs.evidencePack,
     publishPack: prefs.publishPack && prefs.packPlatforms.length > 0 ? prefs.packPlatforms : undefined,
     seriesPack: prefs.seriesPack,
-    variants: prefs.variants > 1 ? { count: prefs.variants, llm: config } : undefined,
+    variants: prefs.variants > 1 && aiConfig ? { count: prefs.variants, llm: aiConfig } : undefined,
     aiCover: prefs.aiCover !== "off" && atlasReady ? { tier: prefs.aiCover, llm: config } : undefined,
     outDir: prefs.outDir,
     quality: prefs.quality,

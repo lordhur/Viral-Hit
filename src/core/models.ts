@@ -61,6 +61,15 @@ export const SENSEVOICE_MODEL: ModelAsset = {
   approxBytes: 1_047_870_769,
 };
 
+/** Whisper Base multilingue int8 — transcription française locale, sans clé API. */
+export const WHISPER_FR_MODEL: ModelAsset = {
+  id: "whisper-base-multilingual",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "sherpa-onnx-whisper-base",
+  approxBytes: 207_557_382,
+};
+
 /**
  * Paraformer-large zh/en int8 (Apache-2.0) via sherpa-onnx — the "more
  * accurate" local tier: noticeably lower zh CER than SenseVoice-Small,

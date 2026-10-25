@@ -32,6 +32,17 @@ import { ModalShell } from "./ui";
 const TAIL_PREVIEW_SEC = 2.5;
 /** 安全区偏好持久化(开关 + 平台选择)。 */
 const SAFEZONE_LS_KEY = "hotclip-safezone";
+const SAFEZONE_NAME_FR: Record<string, string> = {
+  generic: "Vertical générique",
+  douyin: "Douyin",
+  kuaishou: "Kuaishou",
+  bilibili: "Bilibili vertical",
+  channels: "Chaînes WeChat",
+  xiaohongshu: "RedNote",
+  tiktok: "TikTok",
+  reels: "Instagram Reels",
+  shorts: "YouTube Shorts",
+};
 
 function loadSafeZonePref(): { on: boolean; platform: string } {
   try {
@@ -512,7 +523,7 @@ export function ClipReviewModal({
             >
               {SAFE_ZONE_PLATFORMS.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name[locale === "zh" ? "zh" : "en"]}
+                  {locale === "fr" ? SAFEZONE_NAME_FR[p.id] ?? p.name.en : p.name[locale === "zh" ? "zh" : "en"]}
                 </option>
               ))}
             </select>
