@@ -59,6 +59,17 @@ describe("applyBrandToLayout", () => {
     expect(applyBrandToLayout(VERTICAL_LAYOUT, { captionPosition: "low" }).marginV).toBe(420);
     expect(applyBrandToLayout(VERTICAL_LAYOUT, { captionPosition: "high" }).marginV).toBe(700);
   });
+
+  it("applique une position libre horizontale et verticale à tous les styles", () => {
+    const layout = applyBrandToLayout(VERTICAL_LAYOUT, { captionX: 0.7, captionY: 0.4 });
+    expect(layout).toMatchObject({ marginV: 1152, marginLeft: 492, marginRight: 60, captionX: 0.7, manualCaptionPosition: true });
+    const ass = buildCaptionAss([{ text: "test", startSec: 0, endSec: 1 }], 0, layout, "hormozi");
+    expect(ass.split("\n").find((line) => line.startsWith("Style: Caption,"))).toContain(",492,60,1152,1");
+    expect(buildOverlayPayload([{ text: "test", startSec: 0, endSec: 1 }], layout).centerFrac).toBe(0.7);
+    const horizontalOnly = applyBrandToLayout(VERTICAL_LAYOUT, { captionX: 0.7 });
+    const defaultHeightAss = buildCaptionAss([{ text: "test", startSec: 0, endSec: 1 }], 0, horizontalOnly, "hormozi");
+    expect(defaultHeightAss.split("\n").find((line) => line.startsWith("Style: Caption,"))).toContain(",492,60,768,1");
+  });
 });
 
 describe("sanitizeBrand(IPC 边界消毒)", () => {
@@ -74,6 +85,10 @@ describe("sanitizeBrand(IPC 边界消毒)", () => {
       fontScale: 1.6,
       watermark: { path: "/tmp/logo.png", corner: "top-right", opacity: 1 },
     });
+  });
+
+  it("borne la position libre à la zone sûre", () => {
+    expect(sanitizeBrand({ captionX: 2, captionY: -1 })).toEqual({ captionX: 0.85, captionY: 0.15 });
   });
 
   it("全空/非对象 → undefined(管线走默认)", () => {

@@ -13,6 +13,7 @@ import {
   type CropRect,
 } from "../../../shared/camera-layout";
 import { DEFAULT_SENSITIVE_WORDS, sanitizeSensitiveWords } from "../../../core/sensitive-words";
+import { sanitizeCaptionOffsetMs } from "../../../shared/caption-timing";
 
 const STORAGE_KEY = "hotclip-render-prefs";
 
@@ -22,6 +23,8 @@ export interface RenderPrefs {
   cameraCrop: CropRect;
   cameraHeightFrac: number;
   captionStyle: CaptionStyleChoice;
+  /** Output-only subtitle delay; positive values show captions later. */
+  captionOffsetMs: number;
   jumpCut: boolean;
   /** 保留呼吸口:跳剪剪长停顿时每个剪口多留一口气,不无缝贴死。 */
   keepBreath: boolean;
@@ -107,6 +110,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   cameraCrop: { ...defaultCameraGameplayLayout().cameraCrop },
   cameraHeightFrac: defaultCameraGameplayLayout().cameraHeightFrac,
   captionStyle: "keyword",
+  captionOffsetMs: 0,
   jumpCut: true,
   keepBreath: false, // 呼吸口改变跳剪节奏,默认保持历史紧凑感,由用户按素材开
   speakerLabels: true, // 缺省开:没开多人对谈时词表无标注,自然不生效
@@ -118,8 +122,8 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   sfx: false, // 音效改变成片听感,默认关由用户选择(打点规则见 sound-design.ts)
   bgmPath: "", // BGM 是强风格选择且涉及用户自备素材,默认不加
   trimUi: true,
-  titleCard: true,
-  openingHook: true,
+  titleCard: false,
+  openingHook: false,
   normalizeLoudness: true,
   denoise: false, // 素材千差万别,降噪宁保守默认关
   denoiseMode: "basic", // 升级不改变旧开关行为;智能档需用户显式选择
@@ -200,8 +204,12 @@ function load(): RenderPrefs {
       if (!["compare", "tiktok", "instagram"].includes(out.targetPlatform)) out.targetPlatform = "compare";
       if (!["high", "standard", "compact"].includes(out.quality)) out.quality = "high";
       if (!["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"].includes(out.captionStyle)) out.captionStyle = "keyword";
+      out.captionOffsetMs = sanitizeCaptionOffsetMs(out.captionOffsetMs);
       if (!["off", "volume", "premium"].includes(out.aiCover)) out.aiCover = "off";
       if (!["basic", "smart"].includes(out.denoiseMode)) out.denoiseMode = "basic";
+      // Retired title plates must also disappear from previously saved setups.
+      out.titleCard = false;
+      out.openingHook = false;
       const camera = normalizeCameraGameplayLayout({
         cameraCrop: out.cameraCrop,
         cameraHeightFrac: out.cameraHeightFrac,
@@ -224,7 +232,14 @@ interface RenderPrefsState {
 export const useRenderPrefs = create<RenderPrefsState>((set, get) => ({
   prefs: load(),
   setPref: (partial) => {
-    const prefs = { ...get().prefs, ...partial };
+    const current = get().prefs;
+    const prefs = {
+      ...current,
+      ...partial,
+      captionOffsetMs: sanitizeCaptionOffsetMs(partial.captionOffsetMs ?? current.captionOffsetMs),
+      titleCard: false,
+      openingHook: false,
+    };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     } catch {

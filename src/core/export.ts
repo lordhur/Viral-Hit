@@ -70,6 +70,7 @@ import { planRepair, applyRepair } from "./repair";
 import { applyBrandToLayout } from "./brand";
 import type { AlignmentQualityReport, SubtitleQualityReport, TranscriptWord, BrandStyle } from "../shared/api-types";
 import { normalizeCameraGameplayLayout, type CameraGameplayLayout } from "../shared/camera-layout";
+import { sanitizeCaptionOffsetMs, shiftCaptionTiming } from "../shared/caption-timing";
 import type { WatermarkSpec } from "./cut";
 import { transformScore, type TransformInputs, type TransformScore } from "../shared/transform-score";
 import { buildLedgerCsv, type LedgerRow } from "./ledger";
@@ -319,6 +320,8 @@ export interface ExportRenderOptions {
   cameraGameplay?: CameraGameplayLayout;
   /** Caption style to burn in (clips must carry `words`); omit for none. */
   captionStyle?: CaptionStyle | WebCaptionStyle;
+  /** Output-only subtitle delay in milliseconds; positive shows text later. */
+  captionOffsetMs?: number;
   /** Injected web-overlay renderer (Electron main); required for web styles. */
   renderOverlay?: OverlayRenderFn;
   /** Splice out intra-clip silences (clips must carry `words`). */
@@ -521,6 +524,7 @@ export async function exportClips(
   try {
     // 品牌预设:字号/位置作用于布局,高亮色传给字幕构建,水印挂进 filter 链
     const baseLayout = applyBrandToLayout(options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT, options.brand);
+    const captionOffsetMs = sanitizeCaptionOffsetMs(options.captionOffsetMs);
     const watermark: WatermarkSpec | undefined = options.brand?.watermark
       ? {
           path: options.brand.watermark.path,
@@ -816,7 +820,9 @@ export async function exportClips(
       const visualEnhance = options.autoEnhance && allowSdrVisualEnhance
         ? planVisualEnhancement(visualSamples, baseSegments)
         : null;
-      const captionWords = plan ? plan.words : clip.words;
+      const captionWords = plan
+        ? shiftCaptionTiming(plan.words, captionOffsetMs)
+        : clip.words ? shiftCaptionTiming(clip.words, captionOffsetMs) : undefined;
       const captionShift = plan ? 0 : clip.startSec;
 
       const clipDuration = plan ? plan.durationSec : clip.endSec - clip.startSec;
@@ -844,6 +850,7 @@ export async function exportClips(
         ? clampTranslationLines(clip.translation, clip.startSec, clip.endSec)
         : [];
       if (plan && transLines.length > 0) transLines = remapTranslationLines(transLines, plan.segments);
+      transLines = shiftCaptionTiming(transLines, captionOffsetMs);
       if (assDir && needAss && ((wantCaptions && !webStyle) || options.titleCard || openingHook || transLines.length > 0 || options.aigcLabel)) {
         subtitlePath = join(assDir, `clip-${clip.id}.ass`);
         const ass = buildCaptionAss(
@@ -1436,7 +1443,7 @@ export async function exportClips(
           const miniRel = clip.words
             .filter((w) => w.startSec >= co.startSec - 1e-3 && w.endSec <= co.endSec + 1e-3)
             .map((w) => ({ text: w.text, startSec: w.startSec - co.startSec, endSec: w.endSec - co.startSec }));
-          relWords.unshift(...miniRel);
+          relWords.unshift(...shiftCaptionTiming(miniRel, captionOffsetMs));
         }
         // qa 修复裁过边:被裁掉的头尾词不再出现在画面里,SRT 同步丢弃
         const repaired = qaReport?.repair?.applied === true;

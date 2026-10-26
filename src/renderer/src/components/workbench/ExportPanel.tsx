@@ -11,23 +11,13 @@ import { useLlmStore } from "../../stores/llm-store";
 import { useSchemes, BUILTIN_SCHEMES, matchesScheme } from "../../stores/scheme-store";
 import { PLATFORM_SPECS } from "../../../../shared/platform-specs";
 import { ModalShell, SectionLabel, Segmented, SwitchRow } from "../ui";
+import { CAPTION_KEY, CAPTION_ORDER } from "../../caption-styles";
 import type { CaptionStyleChoice } from "../../../../shared/api-types";
 
 const SCHEME_FR: Record<string, string> = {
   default: "Export par défaut",
   selling: "Pack vente complet",
   minimal: "Minimal et rapide",
-};
-
-const CAPTION_ORDER: CaptionStyleChoice[] = ["keyword", "pop", "bubble", "hormozi", "minimal", "karaoke", "none"];
-const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
-  none: "captionNone",
-  karaoke: "captionKaraoke",
-  keyword: "captionKeyword",
-  pop: "captionPop",
-  hormozi: "captionHormozi",
-  minimal: "captionMinimal",
-  bubble: "captionBubble",
 };
 
 function Group({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
@@ -181,7 +171,6 @@ export function ExportPanel({
               disabled={cameraMode}
               onToggle={() => setPref({ trimUi: !prefs.trimUi })}
             />
-            <SwitchRow label={th("optTitleCard")} hint={th("optTitleCardHint")} on={prefs.titleCard} onToggle={() => setPref({ titleCard: !prefs.titleCard })} />
             <SwitchRow
               label={th("optAutoZoom")}
               hint={th("optAutoZoomHint")}
@@ -218,8 +207,6 @@ export function ExportPanel({
             />
             <SwitchRow label={th("optCleanFillers")} hint={th("optCleanFillersHint")} on={prefs.cleanFillers} onToggle={() => setPref({ cleanFillers: !prefs.cleanFillers })} />
             <SwitchRow label={th("optCutRetakes")} hint={th("optCutRetakesHint")} on={prefs.cutRetakes} onToggle={() => setPref({ cutRetakes: !prefs.cutRetakes })} />
-            <SwitchRow label={th("optAlign")} hint={th("optAlignHint")} on={prefs.preciseAlign} onToggle={() => setPref({ preciseAlign: !prefs.preciseAlign })} />
-            <SwitchRow label={th("optOpeningHook")} hint={th("optOpeningHookHint")} on={prefs.openingHook} onToggle={() => setPref({ openingHook: !prefs.openingHook })} />
             <SwitchRow label={th("optColdOpen")} hint={th("optColdOpenHint")} on={prefs.coldOpen} onToggle={() => setPref({ coldOpen: !prefs.coldOpen })} />
             <SwitchRow label={th("optFlash")} hint={th("optFlashHint")} on={prefs.flashForward} onToggle={() => setPref({ flashForward: !prefs.flashForward })} />
           </Group>
@@ -297,6 +284,7 @@ export function ExportPanel({
                 onChange={(v) => setPref({ captionStyle: v })}
               />
             </div>
+            <SwitchRow label={th("optAlign")} hint={th("optAlignHint")} on={prefs.preciseAlign} onToggle={() => setPref({ preciseAlign: !prefs.preciseAlign })} />
             <SwitchRow
               label={th("optSpeakerTags")}
               hint={th("optSpeakerTagsHint")}

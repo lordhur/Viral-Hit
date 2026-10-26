@@ -14,6 +14,13 @@ export interface AssLayout {
   /** Distance from the bottom edge to the caption block. */
   marginV: number;
   marginH: number;
+  /** Optional asymmetric caption margins for a freely positioned center. */
+  marginLeft?: number;
+  marginRight?: number;
+  /** Free caption center as a fraction of frame width (default 0.5). */
+  captionX?: number;
+  /** Free vertical positioning also overrides style-specific fixed baselines. */
+  manualCaptionPosition?: boolean;
   outline: number;
   /** Max visual width units per line (CJK char = 2 units, latin char = 1). */
   maxLineUnits: number;
@@ -453,7 +460,9 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, hig
     : style === "minimal" ? Math.max(2, layout.outline - 2)
     : layout.outline;
   const shadow = style === "hormozi" ? 3 : style === "minimal" ? 1 : 0;
-  const captionMarginV = style === "hormozi" ? Math.round(layout.playResY * 0.4) : layout.marginV;
+  const captionMarginV = style === "hormozi" && !layout.manualCaptionPosition ? Math.round(layout.playResY * 0.4) : layout.marginV;
+  const captionMarginL = layout.marginLeft ?? layout.marginH;
+  const captionMarginR = layout.marginRight ?? layout.marginH;
   const titleSize = Math.round(layout.fontSize * 0.82);
   const hookSize = Math.round(layout.fontSize * 1.25);
   return [
@@ -466,13 +475,13 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, hig
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Caption,${fontName},${fontSize},${primary},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${outline},${shadow},2,${layout.marginH},${layout.marginH},${captionMarginV},1`,
+    `Style: Caption,${fontName},${fontSize},${primary},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${outline},${shadow},2,${captionMarginL},${captionMarginR},${captionMarginV},1`,
     // title card: opaque-box style (BorderStyle=3) → soft dark plate behind text
     `Style: Title,${fontName},${titleSize},${WHITE_COLOR},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,12,0,8,${layout.marginH},${layout.marginH},${titleMarginV(layout)},1`,
     // opening hook: ember text on a dark plate, big, upper-third (Alignment 8 + high MarginV)
     `Style: Hook,${fontName},${hookSize},${highlight},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,14,0,8,${layout.marginH},${layout.marginH},${hookMarginV(layout)},1`,
     // 双语译文轨:小号白字,主字幕块正下方(整句级,不参与卡拉OK)
-    `Style: Trans,${fontName},${transFontSize(layout)},${WHITE_COLOR},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${Math.max(2, layout.outline - 1)},0,2,${layout.marginH},${layout.marginH},${transMarginV(layout)},1`,
+    `Style: Trans,${fontName},${transFontSize(layout)},${WHITE_COLOR},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${Math.max(2, layout.outline - 1)},0,2,${captionMarginL},${captionMarginR},${transMarginV(layout)},1`,
     // AIGC 显式标识:左上角半透明小字(Alignment 7;避开右上角默认水印位)
     `Style: Aigc,${fontName},${Math.round(layout.fontSize * 0.42)},&H55FFFFFF,${WHITE_COLOR},&H55000000,&H7F000000,0,0,0,0,100,100,0,0,1,2,0,7,${Math.round(layout.marginH * 0.7)},${layout.marginH},${Math.round(layout.playResY * 0.035)},1`,
     "",

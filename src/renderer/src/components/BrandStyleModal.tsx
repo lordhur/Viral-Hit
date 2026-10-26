@@ -3,32 +3,56 @@
  * 多套命名预设持久化在本机;"默认"预设只读,一改自动分叉,永远可回退。
  * 右侧 9:16 迷你画布实时预览当前参数的成片效果。
  */
-import { useState } from "react";
-import { LuPalette, LuX, LuPlus, LuTrash2, LuImage, LuCheck } from "react-icons/lu";
+import { useRef, useState } from "react";
+import { LuPalette, LuX, LuPlus, LuTrash2, LuImage, LuCheck, LuMove, LuRotateCcw } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi } from "../api/provider";
 import { useBrandStore, activeBrandStyle, SWATCHES } from "../stores/brand-store";
+import { useRenderPrefs } from "../stores/render-prefs-store";
+import { CAPTION_KEY, CAPTION_ORDER } from "../caption-styles";
+import { CAPTION_X_BOUNDS, CAPTION_Y_BOUNDS } from "../../../shared/caption-position";
+import { CAPTION_OFFSET_LIMIT_MS, sanitizeCaptionOffsetMs } from "../../../shared/caption-timing";
 import { FONT_SCALE_CHOICES, type BrandStyle, type BrandWatermark } from "../../../shared/api-types";
 import { ModalShell } from "./ui";
 
-/** 迷你预览里字幕基线位置(与管线三档 marginV 倍率一致换算)。 */
-const PREVIEW_BASELINE: Record<string, string> = { low: "78%", standard: "70.8%", high: "63.5%" };
+/** Preview caption center (fractions match the actual ASS/web output). */
+const PREVIEW_BASELINE: Record<"low" | "standard" | "high", number> = { low: 0.78, standard: 0.708, high: 0.635 };
 
 function fileBase(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
 
-export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX.Element {
+export function BrandStyleModal({ onClose, filePath }: { onClose: () => void; filePath?: string }): React.JSX.Element {
   const t = useT("brand");
+  const ts = useT("settings");
+  const { prefs, setPref } = useRenderPrefs();
   const { presets, activeId, setActive, updateActiveStyle, addPreset, removePreset } = useBrandStore();
   const active = presets.find((p) => p.id === activeId) ?? presets[0];
   const style: BrandStyle = active.style;
   const [picking, setPicking] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
 
   const highlight = style.highlightColor ?? "#FF6E0D";
   const fontScale = style.fontScale ?? 1;
   const position = style.captionPosition ?? "standard";
+  const captionX = style.captionX ?? 0.5;
+  const captionY = style.captionY ?? PREVIEW_BASELINE[position];
+  const previewSrc = filePath ? getApi().mediaUrl(filePath, "caption-style") : "";
   const wm = style.watermark;
+
+  const setFreePosition = (x: number, y: number): void => {
+    updateActiveStyle({
+      captionX: Math.max(CAPTION_X_BOUNDS.min, Math.min(CAPTION_X_BOUNDS.max, x)),
+      captionY: Math.max(CAPTION_Y_BOUNDS.min, Math.min(CAPTION_Y_BOUNDS.max, y)),
+      captionPosition: undefined,
+    });
+  };
+  const moveCaption = (event: React.PointerEvent<HTMLDivElement>): void => {
+    if (!dragging.current || !previewRef.current) return;
+    const rect = previewRef.current.getBoundingClientRect();
+    setFreePosition((event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
+  };
 
   const setWatermark = (patch: Partial<BrandWatermark> | null): void => {
     if (patch === null) {
@@ -105,9 +129,20 @@ export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX
           )}
         </div>
 
-        <div className="mt-4 flex gap-5">
+        <div className="mt-4 flex flex-col gap-5 md:flex-row">
           {/* 左:参数 */}
           <div className="min-w-0 flex-1 space-y-4">
+            <section>
+              <h3 className="text-[12px] font-bold text-mut">{t("captionStyle")}</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {CAPTION_ORDER.map((value) => (
+                  <button key={value} type="button" onClick={() => setPref({ captionStyle: value })} className={chip(prefs.captionStyle === value)}>
+                    {ts(CAPTION_KEY[value])}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             {/* 高亮色 */}
             <section>
               <h3 className="text-[12px] font-bold text-mut">{t("highlight")}</h3>
@@ -168,7 +203,7 @@ export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX
             {/* 字幕位置 */}
             <section>
               <h3 className="text-[12px] font-bold text-mut">{t("position")}</h3>
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {(
                   [
                     ["posLow", "low"],
@@ -179,13 +214,44 @@ export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX
                   <button
                     key={key}
                     type="button"
-                    onClick={() => updateActiveStyle({ captionPosition: v === "standard" ? undefined : v })}
-                    className={chip(position === v)}
+                    onClick={() => updateActiveStyle({ captionPosition: v === "standard" ? undefined : v, captionX: undefined, captionY: undefined })}
+                    className={chip(style.captionX === undefined && style.captionY === undefined && position === v)}
                   >
                     {t(key)}
                   </button>
                 ))}
               </div>
+              <p className="mt-2 flex items-center gap-1.5 text-[11px] text-mut"><LuMove className="h-3.5 w-3.5" />{t("dragHint")}</p>
+              <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-center gap-x-2 gap-y-1.5 text-[11px] text-mut">
+                <label htmlFor="caption-x">{t("horizontal")}</label>
+                <input id="caption-x" aria-label={t("horizontal")} type="range" min={CAPTION_X_BOUNDS.min} max={CAPTION_X_BOUNDS.max} step={0.01} value={captionX}
+                  onChange={(e) => setFreePosition(Number(e.target.value), captionY)} className="w-full accent-ember" />
+                <span className="w-9 text-right font-mono">{Math.round(captionX * 100)}%</span>
+                <label htmlFor="caption-y">{t("vertical")}</label>
+                <input id="caption-y" aria-label={t("vertical")} type="range" min={CAPTION_Y_BOUNDS.min} max={CAPTION_Y_BOUNDS.max} step={0.01} value={captionY}
+                  onChange={(e) => setFreePosition(captionX, Number(e.target.value))} className="w-full accent-ember" />
+                <span className="w-9 text-right font-mono">{Math.round(captionY * 100)}%</span>
+              </div>
+            </section>
+
+            <section>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[12px] font-bold text-mut">{t("timing")}</h3>
+                <button type="button" onClick={() => setPref({ captionOffsetMs: 0 })} className="inline-flex items-center gap-1 text-[11px] text-mut hover:text-fg">
+                  <LuRotateCcw className="h-3 w-3" />{t("timingReset")}
+                </button>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <button type="button" onClick={() => setPref({ captionOffsetMs: sanitizeCaptionOffsetMs(prefs.captionOffsetMs - 100) })} className={chip(false)}>-100 ms</button>
+                <input aria-label={t("timing")} type="range" min={-CAPTION_OFFSET_LIMIT_MS} max={CAPTION_OFFSET_LIMIT_MS} step={50} value={prefs.captionOffsetMs}
+                  onChange={(e) => setPref({ captionOffsetMs: Number(e.target.value) })} className="min-w-0 flex-1 accent-ember" />
+                <button type="button" onClick={() => setPref({ captionOffsetMs: sanitizeCaptionOffsetMs(prefs.captionOffsetMs + 100) })} className={chip(false)}>+100 ms</button>
+                <label className="sr-only" htmlFor="caption-offset">{t("timing")}</label>
+                <input id="caption-offset" type="number" min={-CAPTION_OFFSET_LIMIT_MS} max={CAPTION_OFFSET_LIMIT_MS} step={50} value={prefs.captionOffsetMs}
+                  onChange={(e) => setPref({ captionOffsetMs: sanitizeCaptionOffsetMs(e.target.valueAsNumber) })} className="w-20 rounded-lg border border-line bg-panel px-2 py-1.5 text-right font-mono text-[12px]" />
+                <span className="text-[11px] text-mut">ms</span>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-mut">{t("timingHint")}</p>
             </section>
 
             {/* 水印 */}
@@ -246,16 +312,21 @@ export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX
           </div>
 
           {/* 右:9:16 迷你预览 */}
-          <div className="w-36 shrink-0">
-            <div className="relative aspect-9/16 overflow-hidden rounded-xl border border-line bg-gradient-to-b from-panel-2 to-black/70">
-              {/* 标题贴片示意 */}
-              <div className="absolute top-[9%] left-1/2 w-[86%] -translate-x-1/2 rounded-sm bg-black/55 px-1 py-0.5 text-center text-[7px] font-bold text-white">
-                {t("previewTitle")}
-              </div>
-              {/* 字幕行:位置随档位,字号随缩放,高亮色实时生效 */}
+          <div className="mx-auto w-36 shrink-0 md:mx-0">
+            <div ref={previewRef} className="relative aspect-9/16 overflow-hidden rounded-xl border border-line bg-gradient-to-b from-panel-2 to-black/70">
+              {previewSrc && <video src={previewSrc} muted playsInline preload="auto" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />}
+              {/* Dragging updates the same fractions consumed by ASS and web captions. */}
               <div
-                className="absolute left-1/2 w-[92%] -translate-x-1/2 -translate-y-1/2 text-center font-extrabold whitespace-nowrap"
-                style={{ top: PREVIEW_BASELINE[position], fontSize: `${9 * fontScale}px` }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none text-center font-extrabold leading-tight active:cursor-grabbing"
+                style={{
+                  left: `${captionX * 100}%`, top: `${captionY * 100}%`, fontSize: `${9 * fontScale}px`,
+                  width: `${Math.min(92, 200 * Math.min(captionX, 1 - captionX))}%`,
+                  textShadow: "0 1px 3px #000, 0 0 2px #000",
+                }}
+                onPointerDown={(event) => { dragging.current = true; event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault(); }}
+                onPointerMove={moveCaption}
+                onPointerUp={() => { dragging.current = false; }}
+                onPointerCancel={() => { dragging.current = false; }}
               >
                 <span className="text-white">{t("previewSaid")}</span>
                 <span style={{ color: highlight }}>{t("previewHighlight")}</span>

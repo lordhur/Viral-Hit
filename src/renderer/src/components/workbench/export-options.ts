@@ -28,6 +28,7 @@ export function buildRenderToggles(opts: {
       ? { cameraCrop: { ...prefs.cameraCrop }, cameraHeightFrac: prefs.cameraHeightFrac }
       : undefined,
     captionStyle: prefs.captionStyle,
+    captionOffsetMs: prefs.captionOffsetMs,
     jumpCut: prefs.jumpCut,
     keepBreath: prefs.keepBreath,
     speakerLabels: prefs.speakerLabels && diarize,
@@ -41,8 +42,10 @@ export function buildRenderToggles(opts: {
     genreId: prefs.genreId,
     preciseAlign: prefs.preciseAlign,
     trimUi: prefs.trimUi,
-    titleCard: prefs.titleCard,
-    openingHook: prefs.openingHook,
+    // Clip titles/opening text plates are retired from the normal workflow.
+    // Keep them off even when an older persisted preference enabled them.
+    titleCard: false,
+    openingHook: false,
     coldOpen: prefs.coldOpen,
     flashForward: prefs.flashForward,
     alsoLandscape: prefs.alsoLandscape,

@@ -2,7 +2,7 @@
  * 底部出片栏:已选统计 + 变形度预估 + 方案切换 + 导出目录 + 出片按钮。
  * 33 个开关不再铺屏——常用的走方案一键切,全量选项在「全部选项」面板里。
  */
-import { LuFolderOpen, LuPencil, LuScissors, LuSlidersHorizontal, LuSparkles } from "react-icons/lu";
+import { LuFolderOpen, LuPalette, LuPencil, LuScissors, LuSlidersHorizontal, LuSparkles } from "react-icons/lu";
 import { useT } from "../../i18n/store";
 import { getApi, isElectron } from "../../api/provider";
 import { useSession } from "../../stores/session-store";
@@ -18,12 +18,14 @@ export function ExportBar({
   onExport,
   onSelectAutomatic,
   onEditSubtitles,
+  onOpenCaptionStyle,
   onOpenPanel,
 }: {
   defaultOutDir: string;
   onExport: () => void;
   onSelectAutomatic: () => void;
   onEditSubtitles: () => void;
+  onOpenCaptionStyle: () => void;
   onOpenPanel: () => void;
 }): React.JSX.Element {
   const t = useT("workbench");
@@ -86,6 +88,15 @@ export function ExportBar({
       >
         <LuPencil className="h-3.5 w-3.5" />
         {t("tabTranscript")}
+      </button>
+      <button
+        type="button"
+        onClick={onOpenCaptionStyle}
+        title={t("captionStyleHint")}
+        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] font-semibold text-mut transition-colors hover:border-ember/50 hover:text-ember"
+      >
+        <LuPalette className="h-3.5 w-3.5" />
+        {t("captionStyleAction")}
       </button>
       {picked.length > 5 && <span className="hidden shrink-0 text-[10.5px] text-amber-400/90 lg:block">{th("overCapHint", { n: picked.length })}</span>}
       <span className="min-w-0 flex-1" />

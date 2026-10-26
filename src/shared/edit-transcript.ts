@@ -1,8 +1,7 @@
 /**
  * 逐句稿纠错:ASR 错字会一路烧进字幕/翻译/发布文案,在转写页当场改掉
- * 最省事。改完句子文本后,该句的词级时间轴按"字符视觉宽度占比"重建
- * (CJK 逐字、英文按词)——卡拉OK扫色在该句内会略均匀化,但字是对的;
- * 错字与略糙的扫色之间,永远选后者。纯函数,可完整单测。
+ * 最省事。一词换一词的纠错保留原始时间轴；只有词数变化时才按字符视觉
+ * 宽度重建该句词级时间轴。纯函数,可完整单测。
  */
 import type { Transcript, TranscriptWord } from "./api-types";
 
@@ -73,10 +72,15 @@ export function editSegmentText(transcript: Transcript, segmentId: number, newTe
   if (!text || transcript.segments.find((s) => s.id === segmentId)?.text === text) return transcript;
   return {
     ...transcript,
-    segments: transcript.segments.map((seg) =>
-      seg.id === segmentId
-        ? { ...seg, text, words: rebuildWords(text, seg.startSec, seg.endSec) }
-        : seg
-    ),
+    segments: transcript.segments.map((seg) => {
+      if (seg.id !== segmentId) return seg;
+      const tokens = tokenizeForWords(text);
+      // Correcting a typo must not redistribute every timestamp in the sentence.
+      // One-for-one replacements keep the exact ASR timing and provenance.
+      const words = tokens.length > 0 && tokens.length === seg.words.length
+        ? seg.words.map((word, index) => ({ ...word, text: tokens[index] }))
+        : rebuildWords(text, seg.startSec, seg.endSec);
+      return { ...seg, text, words };
+    }),
   };
 }

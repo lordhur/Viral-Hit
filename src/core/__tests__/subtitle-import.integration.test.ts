@@ -135,5 +135,14 @@ describe("subtitle import to media export", () => {
       subtitleQuality: { status: "warn", uncertainWords: words.length },
     });
     expect(await readFile(join(outDir, "timeline.edl"), "utf8")).toContain("Imported captions");
+
+    const shiftedDir = join(root, "export-shifted");
+    const [shifted] = await exportClips(source, [{
+      id: 2, title: "Shifted captions", startSec: 1, endSec: 7, manualBounds: true, pieces, words,
+    }], shiftedDir, { vertical: false, captionStyle: "minimal", captionOffsetMs: 250, subtitleFile: true, qa: false });
+    expect((await probeMedia(shifted.path)).durationSec).toBeCloseTo(4, 1);
+    const shiftedSrt = await readFile(shifted.path.replace(/\.mp4$/, ".srt"), "utf8");
+    expect(shiftedSrt).toContain("00:00:00,250");
+    expect(shiftedSrt).toContain("00:00:02,250");
   }, 30_000);
 });

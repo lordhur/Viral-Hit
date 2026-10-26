@@ -95,6 +95,9 @@
       document.documentElement.style.setProperty("--hl2", data.highlightColor2 || data.highlightColor);
     }
     lineEl.style.top = data.height * data.baselineFrac + "px";
+    var centerX = data.width * (typeof data.centerFrac === "number" ? data.centerFrac : 0.5);
+    lineEl.style.left = centerX + "px";
+    lineEl.style.width = Math.min(data.width * 0.92, 2 * Math.min(centerX, data.width - centerX)) + "px";
     lineEl.style.fontSize = data.fontSize + "px";
     currentLine = -1;
     document.title = "loaded";

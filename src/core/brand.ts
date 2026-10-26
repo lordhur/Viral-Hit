@@ -4,6 +4,7 @@
  */
 import type { AssLayout } from "./subtitle";
 import { FONT_SCALE_CHOICES, type BrandStyle } from "../shared/api-types";
+import { CAPTION_X_BOUNDS, CAPTION_Y_BOUNDS, boundedCaptionFraction as boundedFraction } from "../shared/caption-position";
 
 /** 默认高亮色:火焰橙(与既有硬编码一致,未配置时输出不变)。 */
 export const DEFAULT_HIGHLIGHT_HEX = "#FF6E0D";
@@ -12,7 +13,6 @@ export { FONT_SCALE_CHOICES } from "../shared/api-types";
 
 /** 字幕位置三档 → 基准 marginV 的倍率(竖屏 560→420/560/700,横屏同比)。 */
 const POSITION_FACTOR = { low: 0.75, standard: 1, high: 1.25 } as const;
-
 const HEX_RE = /^#?([0-9a-fA-F]{6})$/;
 
 /** "#RRGGBB" 是否为合法颜色。 */
@@ -58,12 +58,21 @@ export function applyBrandToLayout(layout: AssLayout, brand?: BrandStyle): AssLa
   if (!brand) return layout;
   const scale = clampFontScale(brand.fontScale);
   const posFactor = POSITION_FACTOR[brand.captionPosition ?? "standard"] ?? 1;
-  if (scale === 1 && posFactor === 1) return layout;
+  const captionX = boundedFraction(brand.captionX, CAPTION_X_BOUNDS);
+  const captionY = boundedFraction(brand.captionY, CAPTION_Y_BOUNDS);
+  if (scale === 1 && posFactor === 1 && captionX === undefined && captionY === undefined) return layout;
+  const deltaX = captionX === undefined ? 0 : layout.playResX * (captionX * 2 - 1);
   return {
     ...layout,
     fontSize: Math.round(layout.fontSize * scale),
     maxLineUnits: Math.max(6, Math.round(layout.maxLineUnits / scale)),
-    marginV: Math.round(layout.marginV * posFactor),
+    marginV: captionY === undefined ? Math.round(layout.marginV * posFactor) : Math.round(layout.playResY * (1 - captionY)),
+    ...(captionX === undefined ? {} : {
+      marginLeft: Math.round(layout.marginH + Math.max(0, deltaX)),
+      marginRight: Math.round(layout.marginH + Math.max(0, -deltaX)),
+      captionX,
+    }),
+    ...(captionY !== undefined ? { manualCaptionPosition: true } : {}),
   };
 }
 
@@ -89,6 +98,10 @@ export function sanitizeBrand(raw: unknown): BrandStyle | undefined {
   if (b.captionPosition === "low" || b.captionPosition === "standard" || b.captionPosition === "high") {
     out.captionPosition = b.captionPosition;
   }
+  const captionX = boundedFraction(b.captionX, CAPTION_X_BOUNDS);
+  const captionY = boundedFraction(b.captionY, CAPTION_Y_BOUNDS);
+  if (captionX !== undefined) out.captionX = captionX;
+  if (captionY !== undefined) out.captionY = captionY;
   const wm = b.watermark as Record<string, unknown> | undefined;
   if (wm && typeof wm === "object" && typeof wm.path === "string" && wm.path.trim()) {
     const corner =

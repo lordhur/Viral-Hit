@@ -56,6 +56,21 @@ describe("editSegmentText", () => {
     expect(t.segments[0].text).toBe("错误的橘子"); // 不可变
   });
 
+  it("conserve exactement les timings ASR pour une correction mot à mot", () => {
+    const original: Transcript = {
+      language: "fr", engine: "whisper", durationSec: 4,
+      segments: [{ id: 1, startSec: 0, endSec: 4, text: "Bonjour les amis", words: [
+        { text: "Bonjour", startSec: 0.1, endSec: 0.9, timingSource: "aligned" },
+        { text: "les", startSec: 1.1, endSec: 1.4, timingSource: "aligned" },
+        { text: "amis", startSec: 1.8, endSec: 2.6, timingSource: "aligned" },
+      ] }],
+    };
+    const next = editSegmentText(original, 1, "Bonjour les amies");
+    expect(next.segments[0].words.map((word) => [word.text, word.startSec, word.endSec, word.timingSource])).toEqual([
+      ["Bonjour", 0.1, 0.9, "aligned"], ["les", 1.1, 1.4, "aligned"], ["amies", 1.8, 2.6, "aligned"],
+    ]);
+  });
+
   it("空文本视为误操作,原样返回", () => {
     expect(editSegmentText(t, 1, "   ")).toBe(t);
   });

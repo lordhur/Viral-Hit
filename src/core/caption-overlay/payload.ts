@@ -61,6 +61,8 @@ export interface OverlayPayload {
   height: number;
   /** Caption line center, as a fraction of frame height from the top. */
   baselineFrac: number;
+  /** Caption line center, as a fraction of frame width from the left. */
+  centerFrac: number;
   /** Base font size in CSS pixels (frame pixels — the window is 1:1). */
   fontSize: number;
   /** 关键词渐变的起始色(品牌高亮色);缺省火焰橙。 */
@@ -116,6 +118,7 @@ export function buildOverlayPayload(
     width: layout.playResX,
     height: layout.playResY,
     baselineFrac,
+    centerFrac: layout.captionX ?? 0.5,
     fontSize: layout.fontSize,
     highlightColor,
     highlightColor2: lightenHex(highlightColor, 0.55),

@@ -27,6 +27,13 @@ it("complète les anciennes préférences sans écraser les choix existants", as
   });
 });
 
+it("supprime les anciens titres incrustés et borne le décalage des sous-titres", async () => {
+  const { store } = await loadPrefs({ titleCard: true, openingHook: true, captionOffsetMs: 99_000 });
+  expect(store.getState().prefs).toMatchObject({ titleCard: false, openingHook: false, captionOffsetMs: 10_000 });
+  store.getState().setPref({ titleCard: true, openingHook: true, captionOffsetMs: -250 });
+  expect(store.getState().prefs).toMatchObject({ titleCard: false, openingHook: false, captionOffsetMs: -250 });
+});
+
 it("valide et conserve les nouveaux réglages jeu, plateforme, durée et caméra", async () => {
   const { store, values } = await loadPrefs({
     clipLength: "custom", customDurationSec: 999, clipCount: 99, gameId: "unknown", targetPlatform: "other",

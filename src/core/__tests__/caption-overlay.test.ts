@@ -15,6 +15,7 @@ describe("buildOverlayPayload", () => {
     expect(p.fontSize).toBe(78);
     // marginV 560 from the bottom of 1920 → baseline ≈ 70.8%
     expect(p.baselineFrac).toBeCloseTo((1920 - 560) / 1920, 5);
+    expect(p.centerFrac).toBe(0.5);
   });
 
   it("times words in ms and lingers the last line", () => {

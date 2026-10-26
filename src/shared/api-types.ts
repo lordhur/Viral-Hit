@@ -493,6 +493,10 @@ export interface BrandStyle {
   fontScale?: number;
   /** 字幕高低位置(安全区内三档)。 */
   captionPosition?: "low" | "standard" | "high";
+  /** Optional free horizontal center, as a fraction of frame width. */
+  captionX?: number;
+  /** Optional free vertical center, as a fraction of frame height. */
+  captionY?: number;
   /** logo 水印;不设则不烧。 */
   watermark?: BrandWatermark;
 }
@@ -520,6 +524,8 @@ export interface ExportOptions {
   cameraGameplay?: CameraGameplayLayout;
   /** Caption style to burn into the picture. */
   captionStyle: CaptionStyleChoice;
+  /** Output-only subtitle delay in milliseconds; positive shows text later. */
+  captionOffsetMs?: number;
   /** Splice out intra-clip silences for a tighter, hand-edited rhythm. */
   jumpCut: boolean;
   /** 保留呼吸口:跳剪剪长停顿时每个剪口多留一口气(~0.25s),不无缝贴死。 */

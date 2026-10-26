@@ -539,6 +539,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
           onExport={() => startExport()}
           onSelectAutomatic={() => applyAutomaticSelection()}
           onEditSubtitles={() => setTab("transcript")}
+          onOpenCaptionStyle={() => setShowBrand(true)}
           onOpenPanel={() => setShowExportPanel(true)}
         />
       )}
@@ -586,7 +587,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
           }}
         />
       )}
-      {showBrand && <BrandStyleModal onClose={() => setShowBrand(false)} />}
+      {showBrand && <BrandStyleModal filePath={file?.path} onClose={() => setShowBrand(false)} />}
       {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}
       {showPick && transcript && <TranscriptPickModal transcript={transcript} initialSegmentIds={pickInitialIds} onAdd={addManualClip} onClose={() => setShowPick(false)} />}
       {(() => {

@@ -343,6 +343,8 @@ const frBase = {
     danmakuFound: "{n} messages",
     tabCandidates: "Moments forts",
     tabTranscript: "Corriger les sous-titres",
+    captionStyleAction: "Style et position",
+    captionStyleHint: "Régler le style, la position et la synchronisation des sous-titres",
     undo: "Annuler",
     redo: "Rétablir",
     nothingToUndo: "Rien à annuler",
