@@ -1,0 +1,40 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.local
+
+# JavaScript dependencies and builds
+node_modules/
+out/
+dist/
+release/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Media, user projects and resumable production runs
+uploads/
+runs/
+work/
+work_dir/
+data/
+*.hotclip-write-*
+.DS_Store
+
+# Logs and temporary files
+*.log
+*.tmp
+*.part
+
+# Arena/tool caches
+.cache/

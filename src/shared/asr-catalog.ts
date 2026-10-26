@@ -1,0 +1,86 @@
+/**
+ * ASR engine catalog — the platform-neutral facts about every transcription
+ * engine the app can offer. Display strings live in renderer i18n keyed by
+ * `id`; runtime state (installed) is added by the backend when listing.
+ */
+
+export interface AsrEngineFacts {
+  id: string;
+  kind: "local" | "cloud";
+  /** Languages the engine handles well. */
+  langs: string[];
+  /** Approximate one-time model download, MB (local engines only). */
+  sizeMB?: number;
+  /** Relative speed tier: 1 = slow … 3 = fast. */
+  speed: 1 | 2 | 3;
+  /** Relative accuracy tier: 1 = okay … 3 = best. */
+  accuracy: 1 | 2 | 3;
+  /** True when the user's media must leave the machine. */
+  uploads: boolean;
+  /** User-managed local service; quality tiers are not benchmark claims. */
+  experimental?: boolean;
+}
+
+/**
+ * Order = display order. The first entry is the free French default;
+ * every local model is downloaded once and cached across updates.
+ */
+export const ASR_CATALOG: AsrEngineFacts[] = [
+  {
+    id: "whisper-fr",
+    kind: "local",
+    langs: ["fr"],
+    sizeMB: 198,
+    speed: 2,
+    accuracy: 2,
+    uploads: false,
+  },
+  {
+    id: "whisper-fr-small",
+    kind: "local",
+    langs: ["fr"],
+    sizeMB: 610,
+    speed: 1,
+    accuracy: 3,
+    uploads: false,
+  },
+  {
+    id: "sensevoice",
+    kind: "local",
+    langs: ["zh", "yue", "en", "ja", "ko"],
+    sizeMB: 170,
+    speed: 3,
+    accuracy: 1,
+    uploads: false,
+  },
+  {
+    id: "paraformer",
+    kind: "local",
+    langs: ["zh", "en"],
+    sizeMB: 230,
+    speed: 2,
+    accuracy: 2,
+    uploads: false,
+  },
+  {
+    id: "fireredasr",
+    kind: "local",
+    langs: ["zh", "方言", "en"],
+    sizeMB: 520,
+    speed: 2,
+    accuracy: 3,
+    uploads: false,
+  },
+  {
+    id: "qwen3", kind: "local", langs: ["30 languages"], speed: 1, accuracy: 3,
+    uploads: false, experimental: true,
+  },
+  {
+    id: "elevenlabs",
+    kind: "cloud",
+    langs: ["90+", "zh", "en"],
+    speed: 3,
+    accuracy: 3,
+    uploads: true,
+  },
+];

@@ -1,0 +1,51 @@
+appId: com.viralhit.app
+productName: Viral Hit
+# Reuse the explicit Electron 43 installation instead of downloading it twice.
+electronDist: node_modules/electron/dist
+directories:
+  buildResources: build
+files:
+  - out/**/*
+  - "!**/*.map"
+# Native executables/addons must run from the real filesystem, not inside asar.
+asarUnpack:
+  - "**/node_modules/ffmpeg-static/**"
+  - "**/node_modules/@ffmpeg-installer/**"
+  - "**/node_modules/@ffprobe-installer/**"
+  - "**/node_modules/sherpa-onnx-*/**"
+  - "**/node_modules/onnxruntime-node/**"
+extraResources:
+  - from: tools/qwen-speech-server.py
+    to: speech/qwen-speech-server.py
+  - from: resources/fonts
+    to: fonts
+  - from: resources/caption-templates
+    to: caption-templates
+  # Python recap agent and the seven preserved production skills.
+  - from: agent
+    to: agent
+  - from: recap
+    to: recap
+win:
+  target:
+    - nsis
+    - zip
+  artifactName: Viral-Hit-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+mac:
+  identity: "-"
+  hardenedRuntime: false
+  notarize: false
+  target:
+    - dmg
+  artifactName: Viral-Hit-${version}-mac-${arch}.${ext}
+  category: public.app-category.video
+linux:
+  target:
+    - AppImage
+  artifactName: Viral-Hit-${version}-linux-${arch}.${ext}
+  category: Video
+npmRebuild: false
