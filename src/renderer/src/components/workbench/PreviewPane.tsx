@@ -4,11 +4,16 @@
  * La lecture ciblée s'arrête à la fin du candidat affiché.
  */
 import { useEffect, useRef, useState } from "react";
-import { LuPlay, LuPause, LuSkipBack, LuSkipForward } from "react-icons/lu";
+import { LuPlay, LuPause, LuPencil, LuSkipBack, LuSkipForward } from "react-icons/lu";
 import { getApi } from "../../api/provider";
 import { useT } from "../../i18n/store";
 import { useRenderPrefs } from "../../stores/render-prefs-store";
+import { activeBrandStyle, useBrandStore } from "../../stores/brand-store";
+import { TranscriptTextEditor } from "../TranscriptTextEditor";
 import { cameraCropPercentStyle } from "../../../../shared/camera-layout";
+import { captionDisplayPosition } from "../../../../shared/caption-position";
+import { editSegmentText } from "../../../../shared/edit-transcript";
+import type { Transcript } from "../../../../shared/api-types";
 
 export interface PreviewTransportCommand {
   id: number;
@@ -41,11 +46,15 @@ export function PreviewPane({
   onNextCandidate,
   transportCommand,
   clip = null,
+  transcript = null,
+  onEditTranscript,
   cameraAvailable = true,
   compact = false,
 }: {
   filePath: string | null;
   durationSec: number;
+  transcript?: Transcript | null;
+  onEditTranscript?: (transcript: Transcript) => void;
   /** External seek request from the timeline/candidate list (NaN = none). */
   seekSec: number;
   onTime: (sec: number) => void;
@@ -58,13 +67,15 @@ export function PreviewPane({
 }): React.JSX.Element {
   const t = useT("workbench");
   const { prefs } = useRenderPrefs();
+  const brandState = useBrandStore();
   const mainRef = useRef<HTMLVideoElement>(null);
   const auditionEnd = useRef<number | null>(null);
   const cropRef = useRef<HTMLVideoElement>(null);
   const cameraRef = useRef<HTMLVideoElement>(null);
   const gameplayRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
-  const [now, setNow] = useState(0);
+  const [now, setNow] = useState(() => Math.max(0, Math.min(durationSec, Number.isFinite(seekSec) ? seekSec : 0)));
+  const [editingSeg, setEditingSeg] = useState<number | null>(null);
   // Distinct path segments prevent Chromium from sharing one media buffer
   // between the source and the synchronized vertical views.
   const src = filePath ? getApi().mediaUrl(filePath, "main") : "";
@@ -73,6 +84,15 @@ export function PreviewPane({
   const gameplaySrc = filePath ? getApi().mediaUrl(filePath, "gameplay-live") : "";
   const cameraMode = cameraAvailable && prefs.vertical && prefs.cameraGameplay;
   const [mainErrCode, setMainErrCode] = useState(0);
+  const brand = activeBrandStyle(brandState);
+  const captionOffsetSec = prefs.captionOffsetMs / 1000;
+  const activeSegment = prefs.captionStyle === "none" ? null : transcript?.segments.find((segment) =>
+    now >= segment.startSec + captionOffsetSec && now < segment.endSec + captionOffsetSec
+  ) ?? null;
+  const editingSegment = transcript?.segments.find((segment) => segment.id === editingSeg) ?? null;
+  const captionPosition = captionDisplayPosition(brand, prefs.captionStyle);
+  const captionStyleScale = prefs.captionStyle === "pop" ? 1.45 : prefs.captionStyle === "hormozi" ? 1.5 : prefs.captionStyle === "minimal" ? 1.12 : 1;
+  const captionFontScale = (brand?.fontScale ?? 1) * captionStyleScale;
 
   const endForTime = (seconds: number): number | null =>
     clip && seconds >= clip.startSec && seconds < clip.endSec ? clip.endSec : null;
@@ -87,7 +107,9 @@ export function PreviewPane({
       return;
     }
     auditionEnd.current = clip.endSec;
-    video.currentTime = Math.max(0, Math.min(durationSec, clip.startSec));
+    const next = Math.max(0, Math.min(durationSec, clip.startSec));
+    video.currentTime = next;
+    setNow(next);
   }, [clip?.id, clip?.startSec, clip?.endSec, durationSec]);
 
   // External seek request (timeline/candidate focus). Seeks inside the focused
@@ -98,6 +120,7 @@ export function PreviewPane({
     const next = Math.max(0, Math.min(durationSec, seekSec));
     auditionEnd.current = endForTime(next);
     video.currentTime = next;
+    setNow(next);
   }, [seekSec]);
 
   const syncVertical = (): void => {
@@ -142,6 +165,7 @@ export function PreviewPane({
     auditionEnd.current = null;
     if (transportCommand.action === "audition" && Number.isFinite(transportCommand.startSec) && Number.isFinite(transportCommand.endSec)) {
       video.currentTime = Math.max(0, transportCommand.startSec!);
+      setNow(video.currentTime);
       auditionEnd.current = Math.min(durationSec, transportCommand.endSec!);
       void video.play().catch(() => { auditionEnd.current = null; });
       return;
@@ -153,6 +177,7 @@ export function PreviewPane({
     const delta = transportCommand.action === "back5" ? -5 : 5;
     const next = Math.max(0, Math.min(durationSec, video.currentTime + delta));
     video.currentTime = next;
+    setNow(next);
     auditionEnd.current = endForTime(next);
   }, [durationSec, transportCommand]);
 
@@ -176,7 +201,7 @@ export function PreviewPane({
                 setPlaying(false);
                 syncVertical();
               }}
-              onSeeked={syncVertical}
+              onSeeked={(event) => { setNow(event.currentTarget.currentTime); syncVertical(); }}
               onTimeUpdate={(event) => {
                 const sec = event.currentTarget.currentTime;
                 if (auditionEnd.current !== null && sec >= auditionEnd.current) {
@@ -248,11 +273,50 @@ export function PreviewPane({
           ) : (
             <div className="h-full bg-gradient-to-b from-panel-2 to-panel" />
           )}
+          {activeSegment && (
+            <button
+              type="button"
+              data-preview-caption={activeSegment.id}
+              data-caption-style={prefs.captionStyle}
+              aria-label={t("previewEditCaption")}
+              title={t("previewCaptionHint")}
+              disabled={!onEditTranscript}
+              onClick={() => { mainRef.current?.pause(); setEditingSeg(activeSegment.id); }}
+              className={`group/caption absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-md px-1 py-0.5 text-center font-extrabold leading-tight whitespace-pre-wrap outline-none transition-colors hover:bg-black/40 focus-visible:ring-2 focus-visible:ring-ember ${prefs.captionStyle === "bubble" ? "bg-black/65" : ""}`}
+              style={{
+                left: `${captionPosition.x * 100}%`,
+                top: `${captionPosition.y * 100}%`,
+                width: `${Math.min(92, 200 * Math.min(captionPosition.x, 1 - captionPosition.x))}%`,
+                fontSize: `${Math.max(5, (compact ? 6.5 : 10) * captionFontScale)}px`,
+                color: prefs.captionStyle === "karaoke" || prefs.captionStyle === "hormozi" ? brand?.highlightColor ?? "#FF6E0D" : "#fff",
+                textShadow: "0 1px 3px #000, 0 0 2px #000",
+              }}
+            >
+              {prefs.captionStyle === "hormozi" ? activeSegment.text.toUpperCase() : activeSegment.text}
+              <LuPencil className="absolute -top-2 -right-2 h-3 w-3 rounded-full bg-ember p-0.5 text-white opacity-80 transition-opacity group-hover/caption:opacity-100" />
+            </button>
+          )}
           <span className="pointer-events-none absolute right-0 bottom-1.5 left-0 bg-black/35 py-0.5 text-center text-[9px] text-fg/70">
             {cameraMode ? t("verticalCameraPreview") : t("verticalPreview")}
           </span>
         </div>
       </div>
+
+      {editingSegment && transcript && onEditTranscript && (
+        <div data-preview-caption-editor={editingSegment.id} className="flex items-start gap-2 rounded-xl border border-ember/40 bg-panel-2/70 p-2.5">
+          <LuPencil className="mt-1 h-4 w-4 shrink-0 text-ember" />
+          <TranscriptTextEditor
+            key={`${editingSegment.id}:${editingSegment.text}`}
+            initialText={editingSegment.text}
+            onSave={(value) => {
+              const next = editSegmentText(transcript, editingSegment.id, value);
+              if (next !== transcript) onEditTranscript(next);
+              setEditingSeg(null);
+            }}
+            onCancel={() => setEditingSeg(null)}
+          />
+        </div>
+      )}
 
       {/* Transport */}
       <div className="flex items-center gap-2.5">

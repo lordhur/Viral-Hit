@@ -10,13 +10,10 @@ import { getApi } from "../api/provider";
 import { useBrandStore, activeBrandStyle, SWATCHES } from "../stores/brand-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
 import { CAPTION_KEY, CAPTION_ORDER } from "../caption-styles";
-import { CAPTION_X_BOUNDS, CAPTION_Y_BOUNDS } from "../../../shared/caption-position";
+import { CAPTION_X_BOUNDS, CAPTION_Y_BOUNDS, captionDisplayPosition } from "../../../shared/caption-position";
 import { CAPTION_OFFSET_LIMIT_MS, sanitizeCaptionOffsetMs } from "../../../shared/caption-timing";
 import { FONT_SCALE_CHOICES, type BrandStyle, type BrandWatermark } from "../../../shared/api-types";
 import { ModalShell } from "./ui";
-
-/** Preview caption center (fractions match the actual ASS/web output). */
-const PREVIEW_BASELINE: Record<"low" | "standard" | "high", number> = { low: 0.78, standard: 0.708, high: 0.635 };
 
 function fileBase(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
@@ -36,8 +33,7 @@ export function BrandStyleModal({ onClose, filePath }: { onClose: () => void; fi
   const highlight = style.highlightColor ?? "#FF6E0D";
   const fontScale = style.fontScale ?? 1;
   const position = style.captionPosition ?? "standard";
-  const captionX = style.captionX ?? 0.5;
-  const captionY = style.captionY ?? PREVIEW_BASELINE[position];
+  const { x: captionX, y: captionY } = captionDisplayPosition(style, prefs.captionStyle);
   const previewSrc = filePath ? getApi().mediaUrl(filePath, "caption-style") : "";
   const wm = style.watermark;
 

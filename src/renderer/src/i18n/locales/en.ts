@@ -682,6 +682,8 @@ export const en = {
     shortcutHint: "Shortcuts: Space/K play · J/L ±5s · I/O set in/out · [/] switch candidates",
     sourcePreview: "Source",
     verticalPreview: "Vertical 9:16",
+    previewEditCaption: "Edit the displayed subtitle",
+    previewCaptionHint: "Click to correct this subtitle from the preview",
     verticalCameraPreview: "Camera 9:16 preview",
     playFocusedClip: "Play the focused clip and stop at its end",
     noPreview: "Preview unavailable in this environment (export unaffected)",

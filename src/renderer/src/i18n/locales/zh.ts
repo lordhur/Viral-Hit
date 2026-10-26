@@ -686,6 +686,8 @@ export const zh = {
     shortcutHint: "快捷键：空格/K 播放暂停 · J/L 前后 5 秒 · I/O 设入出点 · [/] 切换候选",
     sourcePreview: "源画面",
     verticalPreview: "竖屏 9:16",
+    previewEditCaption: "修改当前显示的字幕",
+    previewCaptionHint: "点击即可在预览中修正这条字幕",
     verticalCameraPreview: "摄像头竖屏 9:16 预览",
     playFocusedClip: "只播放当前切片,到结尾自动停止",
     noPreview: "此环境无法预览画面(不影响出片)",

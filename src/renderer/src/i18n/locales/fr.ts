@@ -358,6 +358,8 @@ const frBase = {
     shortcutHint: "Raccourcis : Espace/K lecture · J/L ±5 s · I/O entrée/sortie · [/] candidats",
     sourcePreview: "Source",
     verticalPreview: "Vertical 9:16",
+    previewEditCaption: "Modifier le sous-titre affiché",
+    previewCaptionHint: "Cliquez pour corriger ce sous-titre dans l’aperçu",
     noPreview: "Prévisualisation indisponible (export non affecté)",
     previewReadFailed: "Le flux vidéo a été interrompu (code {code}) ; l’export n’est pas affecté.",
     legendLoud: "volume",

@@ -375,6 +375,8 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
               <PreviewPane
                 filePath={file.path}
                 durationSec={durationSec}
+                transcript={transcript}
+                onEditTranscript={session.editTranscript}
                 seekSec={seekSec}
                 onTime={(sec) => {
                   currentSecRef.current = sec;
